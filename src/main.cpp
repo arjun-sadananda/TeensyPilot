@@ -43,36 +43,32 @@
 #define BKF_DIPLAY true
 
 #define BKF 0
-#define EKF 1
-#define TRIAD 2 
+#define TRIAD 1 
+#define EKF 2
+
 #define TP_ESTIMATOR TRIAD
 
 #define NO_DISPLAY 0
-#define BKF_DISPLAY 1
-#define MAG_ACC_DISPLAY 2
+#define ACC_MAG_BALL 1
+#define BKF_DISPLAY 2
 #define TRIAD_DISPLAY 3
+
 #define DISPLAY_MODE TRIAD_DISPLAY
-// #if DEBUG_MODE == true
-//     #define debug(x) Serial.print(x)
-// #else
-//     #define debug(x) 
-// #endif
+
+#define SERIAL_ON true
+
+#if SERIAL_ON
+    #define debug(x) Serial.print(x)
+    #define debugln(x) Serial.println(x)
+#else
+    #define debug(x) 
+    #define debugln(x)
+#endif
 
 uint32_t loop_timer;
 
 #define Tus 10000
-// #define Ts 0.02  //400Hz Kalman Iteration speed
 
-
-Quaternion q;
-Vector3f rot(1/sqrt(3.0),1/sqrt(3.0),1/sqrt(3.0));
-float theta = 0;
-
-// className *obj = new className() ??
-// MPU6050 mpu6050;
-// Mag5883 mag5883;
-// BMP280 bmp280;
-// TP_BKF tp_bkf(mpu6050, mag5883, bmp280);
 TP_BKF tp_bkf;
 TP_TRIAD tp_triad;
 TP_Display tp_display;
@@ -86,19 +82,19 @@ void setup() {
     Wire.begin();
     delay(250);
 
+#if SERIAL_ON
+    Serial.begin(57600);
+#endif
+
 #if TP_ESTIMATOR == BKF
     tp_bkf.init_sensors();
-#elif TP_ESTIMATOR == TRIAD
+#elif TP_ESTIMATOR ==TRIAD
     tp_triad.init_sensors();
 #endif
 
-    Serial.begin(57600);
-
-
-    tp_display.display_setup();
 #if DISPLAY_MODE == BKF_DISPLAY
     tp_display.euler_display_setup();
-#elif DISPLAY_MODE == MAG_ACC_DISPLAY
+#elif DISPLAY_MODE == ACC_MAG_BALL
     tp_display.mag_acc_display_setup();
 #elif DISPLAY_MODE == TRIAD_DISPLAY
     tp_display.triad_display_setup();
@@ -107,21 +103,15 @@ void setup() {
     // pinMode(13, OUTPUT);
     // digitalWrite(13, HIGH);
 
-    // Serial.println("Calibrating Gyro");
+    debugln("Calibrating Gyro");
     tp_display.printStatus("Calibrating Gyro");
     tp_bkf.mpu.calibrate_gyro();
-    // Serial.println(tp_bkf.mpu.GyroOffset.x);
-    // Serial.println(tp_bkf.mpu.GyroOffset.y);
-    // Serial.println(tp_bkf.mpu.GyroOffset.z);
-    // Serial.println("Gyro Calibration Done");
 
-    // Serial.println("Calibrating Baro");
+    // debugln("Calibrating Baro");
     // tp_display.printStatus("Calibrating Baro");
     // tp_bkf.baro.calibrate_baro();
     // Serial.println(BaroAltOffset);
     // Serial.println("Baro Calibration Done");
-    tp_display.printStatus("Starting Estimator");
-    delay(2000);
     tp_display.printStatus("Estimator Running");
 }
 
@@ -135,46 +125,7 @@ void loop() {
     tp_triad.estimate();
 #endif
 
-    // rot += rot*0.001;
-    // if(theta>=M_2PI)
-    //     theta=0;
-    // theta += 0.001;
-    // q.from_axis_angle(rot, theta);
-    // tp_display.drawCube(q);
     // ------------------- For Serial Plotter -------------------------
-    // int ref = 15;
-    // Serial.print(ref);
-    // Serial.print(", ");
-    // Serial.print(-ref);
-    // Serial.print(", ");
-
-    // ************************Print Raw Data***************************
-    // Serial.print("  RateTheta_Gyro ");
-    // Serial.print(RateTheta_Gyro);
-    // Serial.print("  AccX ");
-    // Serial.print(acc_x);
-    // Serial.print("  AccY ");
-    // Serial.print(acc_y);
-    // Serial.print("  AccZ ");
-    // Serial.print(acc_z);
-    // Serial.print("\t");
-
-
-    // Serial.print(" Gyro:");
-    // Serial.print(theta_gyro);
-    // Serial.print(" Accel:");
-    // Serial.print(mpu6050.accel_pitch);
-
-    // Serial.print(" BKF roll:");
-    // Serial.println((int)tp_bkf.attitude_euler.x);
-
-    // Serial.print(" BKF pitch:");
-    // Serial.print(tp_bkf.attitude_euler.y);
-
-    // Serial.print(" BKF yaw:");
-    // Serial.println(tp_bkf.attitude_euler.z);
-
-    static Vector3f a,m;
 
 #if DISPLAY_MODE == BKF_DISPLAY
     tp_display.draw_euler_deg(tp_bkf.attitude_euler.x, tp_bkf.attitude_euler.y, tp_bkf.attitude_euler.z);
@@ -186,42 +137,32 @@ void loop() {
     // rot.z = 0;//tp_bkf.mag_yaw;
     // Matrix3f rot;
     // q.from_euler(rot);//*AP_DEG_TO_RAD);
-    a = tp_bkf.mpu.AccelBody;
-    m = tp_bkf.mag.UnitMagVect;
-    tp_display.drawCube(-tp_bkf.accel_pitch, -tp_bkf.accel_roll, tp_bkf.mag_yaw);
-
-    
-#elif DISPLAY_MODE == MAG_ACC_DISPLAY
+    // a = tp_bkf.mpu.AccelBody;
+    // m = tp_bkf.mag.UnitMagVect;
+    tp_display.drawCube(tp_bkf.accel_roll, tp_bkf.accel_pitch, tp_bkf.mag_yaw);
+    debug(tp_bkf.accel_roll);
+    debug(tp_bkf.accel_pitch);
+    debugln(tp_bkf.mag_yaw);
+#elif DISPLAY_MODE == ACC_MAG_BALL
     Vector3f temp1 = tp_bkf.mpu.AccelBody, temp2 = tp_bkf.mag.MagVect;;
     temp1.rotate(ROTATION_ROLL_180_YAW_90);
     temp2.rotate(ROTATION_ROLL_180);
     tp_display.draw_acc_mag_in_ball(temp1, temp2);
 #elif DISPLAY_MODE == TRIAD_DISPLAY
-    tp_triad.mpu.read_accel();
-    tp_triad.mag.read_mag();
-
-    a = tp_triad.mpu.AccelBody.normalized();
-    m = tp_triad.mag.MagVect.normalized();
-    Rotation NED_TO_DISPLAY = ROTATION_YAW_270;
-    a.rotate(NED_TO_DISPLAY);
-    m.rotate(NED_TO_DISPLAY);
-    tp_display.draw_acc_mag_in_ball(a, m);
-
-    static Vector3f c2;
-    static Matrix3f DCM;
-    
-    c2 = (a%m).normalized();
-    DCM.identity();
-    DCM((c2%a).normalized(), c2, a);
-    // static Vector3f e1(1,0,0), e2(0,1,0); 
-    // DCM(e1, a%e1, a);//
-    // DCM.transpose();
-    // DCM.identity();
-    // q.from_rotation_matrix(DCM);
-
-    tp_display.drawCube(DCM.transposed());
+    tp_display.draw_acc_mag_in_ball(tp_triad.mpu.UnitAccelBody, tp_triad.mag.UnitMagVect);
+    // Transposed to display cude as fixed and display moving
+    tp_display.drawCube(tp_triad.DCM.transposed());
 #endif
     tp_display.printTime(micros() - loop_timer);
+
+
+    // rot += rot*0.001;
+    // if(theta>=M_2PI)
+    //     theta=0;
+    // theta += 0.001;
+    // q.from_axis_angle(rot, theta);
+    // tp_display.drawCube(q);
+
 
     //tp_display.draw_euler_deg(tp_bkf.mpu.accel_roll, tp_bkf.mpu.accel_pitch);
     
@@ -260,21 +201,21 @@ void loop() {
     // Serial.print(",");
     // Serial.print(z);
     // Serial.print("---");
-    Serial.print(a.x);
-    Serial.print(",");
-    Serial.print(a.y);
-    Serial.print(",");
-    Serial.print(a.z);
-    Serial.print("---");
-    Serial.print(m.x);
-    Serial.print(",");
-    Serial.print(m.y);
-    Serial.print(",");
-    Serial.print(m.z);
-    Serial.print(",");
-    Serial.print(tp_bkf.accel_roll);
-    Serial.print("   ");
-    Serial.println(tp_bkf.accel_pitch);
+    // Serial.print(a.x);
+    // Serial.print(",");
+    // Serial.print(a.y);
+    // Serial.print(",");
+    // Serial.print(a.z);
+    // Serial.print("---");
+    // Serial.print(m.x);
+    // Serial.print(",");
+    // Serial.print(m.y);
+    // Serial.print(",");
+    // Serial.print(m.z);
+    // Serial.print(",");
+    // Serial.print(tp_bkf.accel_roll);
+    // Serial.print("   ");
+    // Serial.println(tp_bkf.accel_pitch);
     // Serial.println("   ");
 
     // Serial.print(" angle_roll [deg]:");

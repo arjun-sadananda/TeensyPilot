@@ -13,6 +13,7 @@
 using namespace BLA;
 
 class TP_TRIAD
+
 {
 private:
 protected:
@@ -22,30 +23,23 @@ public:
     Matrix3f DCM;
 
     TP_TRIAD(){}
-    // TP_BKF(MPU6050 mpu, Mag5883 mag, BMP280 baro)
-    // : mpu(mpu)
-    // , mag(mag)
-    // , baro(baro){}
-    // TP_BKF(MPU6050 mpu, Mag5883 mag, BMP280 baro){
-    //     mpu = mpu;
-    //     mag = mag;
-    //     baro = baro;
-    // }
 
     void init_sensors(){
         mpu.mpu_setup();
         mag.mag_setup();
         delay(250); 
     }
-    
+
     void estimate(){
+
         mpu.read_accel();
         mag.read_mag();
-        static Vector3f a = mpu.AccelBody.normalized(), m = mag.MagVect.normalized();
-        static Vector3f c2 = a%m;
-        DCM(c2%a, c2, a);
-        DCM.transpose();  
+
+        static Vector3f c2, a, m;
+        m = mag.UnitMagVect;
+        a = mpu.UnitAccelBody;
+        c2 = (m%a).normalized();
+        DCM(c2, a%c2, a);
+        //  North   compass(East)  gravity(Down)
     }
-
-
 };

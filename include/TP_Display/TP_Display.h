@@ -14,6 +14,9 @@
 class TP_Display{
 
 private:
+
+    const Rotation NED_TO_DISPLAY = ROTATION_YAW_270;
+
     int old_x = 0, old_y =0, old_z = 0;
     uint16_t C_DKBLUE = 0;
     uint16_t C_CYAN = 0;
@@ -22,12 +25,13 @@ private:
     Vector3f vert[8];
     Vector3f face_center[3], rot_face_center[3];
     Vector3f rot_vert[8];
-    Matrix3f rotation;
     Vector2f cube_center, rp_center, y_center;
     int rp_size;
 
     Vector3f ball_center;
     int ball_size;
+
+
 protected:
 public:
     // TP_Display(){
@@ -52,6 +56,7 @@ public:
         Display.print("TeensyPilot");
     }
     void euler_display_setup(){
+        display_setup();
         cube_center.x = 220;
         cube_center.y = 125;
         rp_center.x = y_center.x = 70;
@@ -72,6 +77,7 @@ public:
         vert[4].z = vert[5].z = vert[6].z = vert[7].z = 50.0;
     }
     void mag_acc_display_setup(){
+        display_setup();
         ball_center.x = 160;
         ball_center.y = 135;
         ball_center.z = 0;
@@ -80,6 +86,7 @@ public:
         Display.drawCircle(ball_center.x, ball_center.y, ball_size, ILI9341_WHITE);
     }
     void triad_display_setup(){
+        display_setup();
         ball_center.x = 75;
         ball_center.y = 135;
         ball_center.z = 0;
@@ -103,8 +110,13 @@ public:
         face_center[1].y = 50;
         face_center[2].z = 50;
     }
+
+    // the vectors must be given in NED frame
     void draw_acc_mag_in_ball(Vector3f acc_vect, Vector3f mag_vect){
         static Vector3f old_acc_vect, old_mag_vect;
+        acc_vect.rotate(NED_TO_DISPLAY);
+        mag_vect.rotate(NED_TO_DISPLAY);
+
         drawNeedle(old_acc_vect.normalized()*ball_size, ILI9341_BLACK);
         drawNeedle(old_mag_vect.normalized()*ball_size, ILI9341_BLACK);
         if(acc_vect.z>0)
@@ -169,45 +181,18 @@ public:
 
         // q.rotation_matrix(rotation);
         
+        static Matrix3f rotation;
         rotation.from_euler(roll, pitch, yaw);
         // rotation.rotate
 
-        // erase
-        for (int i =0; i<3; i++){
-            drawEdge(rot_vert[i], rot_vert[i+1], ILI9341_BLACK);
-            drawEdge(rot_vert[4+i], rot_vert[4+i+1], ILI9341_BLACK);
-        }
-        drawEdge(rot_vert[3], rot_vert[0], ILI9341_BLACK);
-        drawEdge(rot_vert[7], rot_vert[4], ILI9341_BLACK);
-        for (int i =0; i<4; i++){
-            drawEdge(rot_vert[i], rot_vert[i+4], ILI9341_BLACK);
-        }
-
-        // rotate
-        for (int i =0; i<8; i++){
-            rot_vert[i] = rotation*vert[i];
-        }
-
-        // draw
-        for (int i =0; i<3; i++){
-            drawEdge(rot_vert[i], rot_vert[i+1], ILI9341_GREEN);
-            drawEdge(rot_vert[4+i], rot_vert[4+i+1], ILI9341_RED);
-        }
-        drawEdge(rot_vert[3], rot_vert[0], ILI9341_GREEN);
-        drawEdge(rot_vert[7], rot_vert[4], ILI9341_RED);
-        for (int i =1; i<3; i++){
-            drawEdge(rot_vert[i], rot_vert[i+4], ILI9341_BLUE);
-        }
-        for (int i =0; i<4; i+=3){
-            drawEdge(rot_vert[i], rot_vert[i+4], ILI9341_CYAN);
-        }
-        static Vector3f center;
-        for (int i =0; i<3; i++){
-            drawEdge(center, face_center[i], ILI9341_DARKGREY);
-        }
+        drawCube(rotation);
+        
     }
     void drawCube(Matrix3f DCM){//-90deg to 90deg
         static Vector3f center;
+        
+        static Rotation NED_TO_DISPLAY = ROTATION_YAW_270;
+
         // erase
         for (int i =0; i<3; i++){
             drawEdge(rot_vert[i], rot_vert[i+1], ILI9341_BLACK);
@@ -221,10 +206,18 @@ public:
             drawEdge(center, rot_face_center[i], ILI9341_BLACK);
 
         // rotate
-        for (int i =0; i<8; i++)
-            rot_vert[i] = DCM*vert[i];
-        for (int i =0; i<3; i++)
-            rot_face_center[i] = DCM*face_center[i];
+        for (int i =0; i<8; i++){
+            rot_vert[i] = vert[i];
+            rot_vert[i].rotate_inverse(NED_TO_DISPLAY);
+            rot_vert[i] = DCM*rot_vert[i];
+            rot_vert[i].rotate(NED_TO_DISPLAY);
+        }
+        for (int i =0; i<3; i++){
+            rot_face_center[i] = face_center[i];
+            rot_face_center[i].rotate_inverse(NED_TO_DISPLAY);
+            rot_face_center[i] = DCM*rot_face_center[i];
+            rot_face_center[i].rotate(NED_TO_DISPLAY);
+        }
 
         // draw
         for (int i =0; i<3; i++){
