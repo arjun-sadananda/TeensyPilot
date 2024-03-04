@@ -70,10 +70,10 @@ public:
         // ******************************** Predict ********************************
         //x(k+1|k)          = A x(k|k)            + B  * u(k)
         attitude_euler.x = attitude_euler.x + Ts * mpu.GyroRate.x;
-        attitude_euler.y = attitude_euler.y - Ts * mpu.GyroRate.y;
+        attitude_euler.y = attitude_euler.y + Ts * mpu.GyroRate.y;
         attitude_euler.z = attitude_euler.z + Ts * mpu.GyroRate.z;
         //cov(k+1|k)        = A cov(k|k)          + sigma_process_noise (can contain drift)
-        var_roll_k = var_roll_k + Ts * Ts * std_dev_gyro * std_dev_gyro;
+        var_roll_k = var_roll_k + Ts * Ts * mpu.std_dev_gyro * mpu.std_dev_gyro;
         // var_pitch_k = var_pitch_k + Ts * Ts * std_dev_gyro * std_dev_gyro;
 
         // ******************************** Update *********************************
@@ -90,9 +90,9 @@ public:
         mag_yaw = atan2(mz*sin(accel_pitch)-my*cos(accel_pitch), 
                         mx*cos(accel_roll)+sin(accel_roll)*(my*sin(accel_pitch) + mz*cos(accel_pitch)));
         // KalmanGain = [cov(t+1|t)*C^T (C*cov(t+1|t)*C^T + sigma_measurement)^-1]
-        //x(k+1|k+1)        = x(k+1|k) +  * (y(k+1) - C x(k+1|k))
-        //cov(k+1|k+1)      = (1-K_k*C)      * cov(k+1|k)
-        static float KalmanGain = var_roll_k * 1 / (1 * var_roll_k + std_dev_accel * std_dev_accel);
+        // x(k+1|k+1)        = x(k+1|k) +  * (y(k+1) - C x(k+1|k))
+        // cov(k+1|k+1)      = (1-K_k*C)      * cov(k+1|k)
+        static float KalmanGain = var_roll_k * 1 / (1 * var_roll_k + mpu.std_dev_accel * mpu.std_dev_accel);
         attitude_euler.x = attitude_euler.x + KalmanGain * (accel_roll - attitude_euler.x);
         var_roll_k = (1 - KalmanGain) * var_roll_k;
 
@@ -100,7 +100,7 @@ public:
         attitude_euler.y = attitude_euler.y + KalmanGain * (accel_pitch - attitude_euler.y);
         // var_pitch_k = (1 - KalmanGain) * var_pitch_k;
 
-        attitude_euler.z = attitude_euler.z + KalmanGain * (mag_yaw - attitude_euler.z);
+        // attitude_euler.z = attitude_euler.z + KalmanGain * (mag_yaw - attitude_euler.z);
         //**************************************************************************
     }
 

@@ -235,6 +235,13 @@ void Matrix3<T>::zero(void)
     c.x = c.y = c.z = 0;
 }
 
+template <typename T>
+void Matrix3<T>::skew_from_vector(const Vector3<T> &v){
+    a.set(0, -v.z, v.y);
+    b.set(v.z, 0, -v.x);
+    c.set(-v.y, v.x, 0);
+}
+
 // create rotation matrix for rotation about the vector v by angle theta
 // See: http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToMatrix/
 template <typename T>

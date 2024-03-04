@@ -278,6 +278,9 @@ public:
     Matrix3<float> tofloat(void) const {
         return Matrix3<float>(a.tofloat(), b.tofloat(), c.tofloat());
     }
+
+    //unused
+    void skew_from_vector(const Vector3<T> &v);
 };
 
 typedef Matrix3<int16_t>                Matrix3i;

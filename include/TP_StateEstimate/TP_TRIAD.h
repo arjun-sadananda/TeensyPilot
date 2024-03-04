@@ -38,8 +38,8 @@ public:
         static Vector3f c2, a, m;
         m = mag.UnitMagVect;
         a = mpu.UnitAccelBody;
-        c2 = (m%a).normalized();
-        DCM(c2, a%c2, a);
-        //  North   compass(East)  gravity(Down)
+        c2 = (a%m).normalized();
+        DCM(c2%a, c2, a);
+        //North(compass-ish)   East  gravity(Down)
     }
 };

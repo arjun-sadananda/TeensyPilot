@@ -26,10 +26,31 @@ struct Matrix4x6
 };
 
 
-class TP_EKF
+class TP_MEKF
 {
 private:
 protected:
+    // PRIVATE VARIABLES
+    // quaternion describing the orientation (q1,q2,q3,q4)=(qx,qy,qz,qw)
+    // (rotation that transform vectors from the sensor reference frame, to the external reference frame)
+    double[] q = new double[4];
+    // angular velocity (rad/s)
+    double[] w = new double[3];
+    // covariance matrix
+    double[] P = new double[36];
+    // covariance matrix of the angular velocity noise (rad^2/s^3)
+    double[] Qw = new double[9];
+    // covariance matrix of the acceleration noise (g^2)
+    double[] Qa = new double[9];
+    // covariance matrix of the angular velocity measurement noise (rad^2/s^2)
+    double[] Rw = new double[9];
+    // covariance matrix of the acceleration measurement noise (g^2)
+    double[] Ra = new double[9];
+    // use or not the chart update
+    boolean chartUpdate = true;
+    // weight of the sigma point produced with the distribution mean (only MUKF)
+    double W0 = 1.0/25.0;
+
 public:
     MPU6050 mpu;
     Mag5883 mag;

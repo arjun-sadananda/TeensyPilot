@@ -16,6 +16,7 @@
 #include "rotations.h"
 #include "vector2.h"
 #include "vector3.h"
+#include "matrix4.h"
 // #include "spline5.h"
 // #include "location.h"
 // #include "control.h"

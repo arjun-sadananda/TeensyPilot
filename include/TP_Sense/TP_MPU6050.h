@@ -5,8 +5,6 @@
 #include <Wire.h>
 
 #define MPU_ADDR 0x68
-#define std_dev_gyro 4     // 4deg/sec (try 1)
-#define std_dev_accel 1    // 3deg try 1
 
 class MPU6050
 {
@@ -16,7 +14,10 @@ private:
 protected:
 public:
     Vector3f GyroOffset;
+    Vector3f a_ref;
 
+    const float std_dev_gyro = 0.3;     // 4deg/sec (try 1) 0.0698132rad/sec
+    const float std_dev_accel = 0.5;    // 3deg try 1 0.0523599??
     Vector3f GyroRate;
     Vector3f AccelBody;       // Measurements from Accel
     Vector3f UnitAccelBody;
@@ -47,6 +48,8 @@ public:
         AccelOffset.x = -.03;
         AccelOffset.y = 0;
         AccelOffset.z = -0.11;
+
+        a_ref.set(0, 0, 1.0f);
     }
     void read_gyro() {  //MPU6050 default address is 0x68
         Wire.beginTransmission(MPU_ADDR);
@@ -57,8 +60,9 @@ public:
         Gyro.x = Wire.read() << 8 | Wire.read();                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
         Gyro.y = Wire.read() << 8 | Wire.read();                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
         Gyro.z = Wire.read() << 8 | Wire.read();                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
-        GyroRate = Gyro.tofloat() / 65.536 - GyroOffset;  //integer to deg/sec  /////////////////////////////////work with int instead?
+        GyroRate = Gyro.tofloat() / 65.536 *AP_DEG_TO_RAD;  //integer to deg/sec  /////////////////////////////////work with int instead?
         GyroRate.rotate(TO_NED_FRAME);
+        GyroRate -= GyroOffset;
     }
 
     void read_accel() {

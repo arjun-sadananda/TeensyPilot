@@ -17,8 +17,12 @@ private:
 
 protected:
 public:
+
+    const float std_dev_mag = 0.8;
+    Vector3f MagRaw;
     Vector3f MagVect;
     Vector3f UnitMagVect;
+    Vector3f m_ref;
     Mag5883(){}
     void mag_setup() {  //MPU6050 default address is 0x68 MPU:Motion Processing Units
         Wire.beginTransmission(MAG_ADDR);
@@ -41,10 +45,26 @@ public:
         Wire.endTransmission();
 
         HardOffsetVect.set(281.3, 1002.3, -322.54);
-        float temp[] =  {1.29, 1.31, 1.28, 0.027, -0.0698, 0.01394};
+        HardOffsetVect.set(281.839179, 1227.446283, -497.300555);
+
+        // float temp[6] =  {1.29, 1.31, 1.28, 0.027, -0.0698, 0.01394};
+        float temp[6] =  {1.320546, 1.152157, 1.301622, 0.000088, -0.026157, 0.122299};
         SoftCalibMat.a.set(temp[0], temp[3], temp[4]);
         SoftCalibMat.b.set(temp[3], temp[1], temp[5]);
         SoftCalibMat.c.set(temp[4], temp[5], temp[2]);
+
+        // m_ref.set(38290.3, 0, 20923.0); //NED
+        // m_ref.normalize();
+    }
+    void set_m_ref(){
+        Vector3f sum;
+        for(int i = 0; i<1000; i++){
+            read_mag();
+            sum += UnitMagVect;
+        }
+        m_ref = sum/=1000;
+        // m_ref.set(38290.3, 0, 20923.0); //NED
+        m_ref.normalize();
     }
     void read_mag(){
         // int mag_raw[3] = {0,0,0};
@@ -53,12 +73,12 @@ public:
         int err = Wire.endTransmission();
         if(!err){
             Wire.requestFrom(MAG_ADDR, 6);
-            MagVect.x = (float)(int16_t)(Wire.read()|Wire.read()<<8);
-            MagVect.y = (float)(int16_t)(Wire.read()|Wire.read()<<8);
-            MagVect.z = (float)(int16_t)(Wire.read()|Wire.read()<<8);
+            MagRaw.x = (float)(int16_t)(Wire.read()|Wire.read()<<8);
+            MagRaw.y = (float)(int16_t)(Wire.read()|Wire.read()<<8);
+            MagRaw.z = (float)(int16_t)(Wire.read()|Wire.read()<<8);
         }
         //Calibration
-        MagVect = SoftCalibMat*(MagVect-HardOffsetVect);
+        MagVect = SoftCalibMat*(MagRaw-HardOffsetVect);
         MagVect.rotate(TO_NED_FRAME);
         UnitMagVect = MagVect.normalized();
     }
