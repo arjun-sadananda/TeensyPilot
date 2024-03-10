@@ -16,8 +16,8 @@ public:
     Vector3f GyroOffset;
     Vector3f a_ref;
 
-    const float std_dev_gyro = 0.3;     // 4deg/sec (try 1) 0.0698132rad/sec
-    const float std_dev_accel = 0.5;    // 3deg try 1 0.0523599??
+    const float std_dev_gyro = 4*DEG_TO_RAD;     // 4deg/sec (try 1) 0.0698132rad/sec
+    const float std_dev_accel = 3*DEG_TO_RAD;    // 3deg try 1 0.0523599??
     Vector3f GyroRate;
     Vector3f AccelBody;       // Measurements from Accel
     Vector3f UnitAccelBody;

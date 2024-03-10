@@ -34,6 +34,7 @@
 #include "TP_StateEstimate\TP_BKF.h"
 #include "TP_StateEstimate\TP_TRIAD.h"
 #include "TP_StateEstimate\TP_EKF.h"
+#include "TP_StateEstimate\TP_MEKF.h"
 #include "TP_Display\TP_Display.h"
 #include "Wire.h"
 
@@ -46,16 +47,18 @@
 #define BKF 0
 #define TRIAD 1 
 #define EKF 2
+#define MEKF 3
 
-#define TP_ESTIMATOR EKF
+#define TP_ESTIMATOR MEKF
 
 #define NO_DISPLAY 0
 #define ACC_MAG_BALL 1
 #define BKF_DISPLAY 2
 #define TRIAD_DISPLAY 3
 #define EKF_DISPLAY 4
+#define MEKF_DISPLAY 5
 
-#define DISPLAY_MODE EKF_DISPLAY
+#define DISPLAY_MODE MEKF_DISPLAY
 
 #define SERIAL_ON true
 
@@ -75,6 +78,7 @@ TP_BKF tp_bkf;
 TP_TRIAD tp_triad;
 TP_EKF tp_ekf;
 TP_Display tp_display;
+TP_MEKF tp_mekf;
 /*
 main
 */
@@ -95,7 +99,7 @@ void setup() {
     tp_display.mag_acc_display_setup();
 #elif DISPLAY_MODE == TRIAD_DISPLAY
     tp_display.triad_display_setup();
-#elif DISPLAY_MODE == EKF_DISPLAY
+#elif DISPLAY_MODE == EKF_DISPLAY || DISPLAY_MODE == MEKF_DISPLAY
     tp_display.ekf_display_setup();
 #endif
 
@@ -113,6 +117,11 @@ void setup() {
     tp_ekf.init_estimator();
     tp_ekf.mpu.calibrate_gyro();
     tp_ekf.mag.set_m_ref();
+#elif TP_ESTIMATOR == MEKF
+    tp_mekf.init_sensors();
+    tp_mekf.init_estimator();
+    tp_mekf.mpu.calibrate_gyro();
+    // tp_mekf.mag.set_m_ref();
 #endif
     // pinMode(13, OUTPUT);
     // digitalWrite(13, HIGH);
@@ -141,6 +150,8 @@ void loop() {
     tp_triad.estimate();
 #elif TP_ESTIMATOR == EKF
     tp_ekf.attitude_estimate();
+#elif TP_ESTIMATOR == MEKF
+    tp_mekf.estimate_attitude();
 #endif
 
     // ------------------- For Serial Plotter -------------------------
@@ -171,13 +182,22 @@ void loop() {
     tp_display.drawCube(tp_triad.DCM.transposed());
 #elif DISPLAY_MODE == EKF_DISPLAY
     tp_display.drawCube(tp_ekf.q);
-    tp_display.draw_acc_mag_in_ball(tp_ekf.mpu.UnitAccelBody, tp_ekf.mag.UnitMagVect);
-    tp_display.draw_acc_mag_in_ball2(tp_ekf.y_a, tp_ekf.y_m);
+    // tp_display.draw_acc_mag_in_ball(tp_ekf.mpu.UnitAccelBody, tp_ekf.mag.UnitMagVect);
+    // tp_display.draw_acc_mag_in_ball2(tp_ekf.y_a, tp_ekf.y_m);
 
-    tp_display.printVector(tp_ekf.v_a, 10, 90, ILI9341_BLUE);
+    tp_display.printVector(tp_ekf.mpu.UnitAccelBody, 10, 90, ILI9341_BLUE);
 
-    tp_display.printVector(tp_ekf.v_m, 10, 150, ILI9341_MAGENTA);
+    tp_display.printVector(tp_ekf.mag.UnitMagVect, 10, 150, ILI9341_MAGENTA);
 
+#elif DISPLAY_MODE == MEKF_DISPLAY
+    tp_display.drawCube(tp_mekf.get_q());
+    tp_mekf.mag.read_mag();
+    tp_display.draw_acc_mag_in_ball(tp_mekf.mpu.UnitAccelBody, tp_mekf.mag.UnitMagVect);
+    // tp_display.draw_acc_mag_in_ball2(tp_ekf.y_a, tp_ekf.y_m);
+
+    // tp_display.printVector(tp_ekf.v_a, 10, 90, ILI9341_BLUE);
+
+    // tp_display.printVector(tp_ekf.v_m, 10, 150, ILI9341_MAGENTA);
     // tp_display.printVector(tp_ekf.mpu.GyroRate, 280, 50);
 #endif
     tp_display.printTime(micros() - loop_timer);
@@ -235,16 +255,16 @@ void loop() {
     // Serial.print(a.z);
     // Serial.print("---");
 
-    debug(tp_ekf.P[0]);
-    debug(tp_ekf.P[1]);
-    debug(tp_ekf.P[2]);
-    debug(tp_ekf.P[3]);
-    debug(tp_ekf.P[4]);
-    debug(tp_ekf.P[5]);
-    debug(tp_ekf.P[6]);
-    debug(tp_ekf.P[7]);
-    debug(tp_ekf.P[8]);
-    debugln(tp_ekf.P[9]);
+    // debug(tp_ekf.P[0]);
+    // debug(tp_ekf.P[1]);
+    // debug(tp_ekf.P[2]);
+    // debug(tp_ekf.P[3]);
+    // debug(tp_ekf.P[4]);
+    // debug(tp_ekf.P[5]);
+    // debug(tp_ekf.P[6]);
+    // debug(tp_ekf.P[7]);
+    // debug(tp_ekf.P[8]);
+    // debugln(tp_ekf.P[9]);
     
     /*
     Magneto Calibrate 
