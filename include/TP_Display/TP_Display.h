@@ -11,6 +11,14 @@
 
 #include <string.h>
 
+
+#define ACC_MAG_BALL 1
+#define BKF_DISPLAY 2
+#define TRIAD_DISPLAY 3
+#define EKF_DISPLAY 4
+#define MEKF_DISPLAY 5
+
+
 class TP_Display{
 
 private:
@@ -39,7 +47,7 @@ public:
     //     // ILI9341_t3 Display = ILI9341_t3(PIN_CS, PIN_DC);
         
     // }
-    void display_setup(){
+    void display_setup(const int DISPLAY_MODE){
         
         C_DKBLUE = Display.color565(0, 0, 40);
         C_CYAN = Display.color565(0, 255, 255);
@@ -53,6 +61,19 @@ public:
         Display.setTextColor(C_CYAN, ILI9341_BLACK);
         Display.setCursor(10, 7);
         Display.print("TeensyPilot");
+        switch (DISPLAY_MODE){
+            case BKF_DISPLAY:
+                euler_display_setup();
+                break;
+            case ACC_MAG_BALL:
+                ball_only_setup();
+                break;
+            case TRIAD_DISPLAY:
+            case EKF_DISPLAY:
+            case MEKF_DISPLAY:
+                ball_and_cube_setup();
+                break;
+        }
     }
     
     void init_cube(){
@@ -70,7 +91,6 @@ public:
         face_center[2].z = 50;
     }
     void euler_display_setup(){
-        display_setup();
         cube_center.x = 220;
         cube_center.y = 125;
         rp_center.x = y_center.x = 70;
@@ -83,8 +103,7 @@ public:
         //0-1-2-3-0 4-5-6-7-4       0-4 1-5 2-6 3-7
         init_cube();
     }
-    void mag_acc_display_setup(){
-        display_setup();
+    void ball_only_setup(){
         ball_center.x = 160;
         ball_center.y = 135;
         ball_center.z = 0;
@@ -92,8 +111,7 @@ public:
 
         Display.drawCircle(ball_center.x, ball_center.y, ball_size, ILI9341_WHITE);
     }
-    void triad_display_setup(){
-        display_setup();
+    void ball_and_cube_setup(){
         ball_center.x = 75;
         ball_center.y = 135;
         ball_center.z = 0;
@@ -104,13 +122,6 @@ public:
         cube_center.x = 220;
         cube_center.y = 125;
         init_cube();
-    }
-    void ekf_display_setup(){
-        // display_setup();
-        triad_display_setup();
-        // cube_center.x = 220;
-        // cube_center.y = 125;
-        // init_cube();
     }
 
 

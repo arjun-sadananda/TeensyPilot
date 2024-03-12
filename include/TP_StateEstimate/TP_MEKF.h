@@ -22,19 +22,22 @@ protected:
     // PRIVATE VARIABLES
     // quaternion describing the orientation (q1,q2,q3,q4)=(qx,qy,qz,qw) wrong order !
     // (rotation that transform vectors from the sensor reference frame, to the external reference frame)
-    double q[4];
+    // double q[4];
+    QuaternionD q;
     // angular velocity (rad/s)
-    double w[3];
+    // double w[3];
+    Vector3d w;
     // covariance matrix
     double P[36];
+    double K[36];
     // covariance matrix of the angular velocity noise (rad^2/s^3)
-    double Qw[9];
+    double Qw;
     // covariance matrix of the acceleration noise (g^2)
-    double Qa[9];
+    double Qa;
     // covariance matrix of the angular velocity measurement noise (rad^2/s^2)
-    double Rw[9];
+    double Rw;
     // covariance matrix of the acceleration measurement noise (g^2)
-    double Ra[9];
+    double Ra;
     // use or not the chart update
     boolean chartUpdate = true;
     const double dt = 0.02;
@@ -52,18 +55,10 @@ public:
         for(int k=0; k<36; k+=7) P[k] = 1.0e2;
         P[2+2*6] = 1.0e-16;
         
-        for(int k=0; k<9; k++){
-            Qw[k] = 0.0;
-            Qa[k] = 0.0;
-            Rw[k] = 0.0;
-            Ra[k] = 0.0;
-        }
-        for(int k=0; k<9; k+=4){
-            Qw[k] = 1.0e1;
-            Qa[k] = 1.0e-2;
-            Rw[k] = 1.0e-3;
-            Ra[k] = 1.0e-3;
-        }
+        Qw = 1.0e1;
+        Qa = 0.0;
+        Rw = 1.0e-3; // Gyro Measure Noise
+        Ra = 1.0e-3;
     }
 
     Quaternion get_q(){
@@ -73,42 +68,6 @@ public:
         return ret;
     }
     
-    void set_q( double* qIn ){
-        for(int i=0; i<4; i++) q[i] = qIn[i];
-        for(int k=0; k<36; k++) P[k] = 0.0;
-        for(int k=0; k<36; k+=7) P[k] = 1.0e-8;
-        P[2+2*6] = 1.0e-16;
-    }
-    
-    void reset_orientation(){
-        q[0] = 1.0;   q[1] = 0.0;   q[2] = 0.0;   q[3] = 0.0;
-        w[0] = 0.0;   w[1] = 0.0;   w[2] = 0.0;
-        
-        for(int k=0; k<36; k++) P[k] = 0.0;
-        for(int k=0; k<36; k+=7) P[k] = 1.0e2;
-        P[2+2*6] = 1.0e-16;
-    }
-    
-    void set_Qw( double QwIn ){
-        for(int k=0; k<9; k++) Qw[k] = 0.0;
-        for(int k=0; k<9; k+=4) Qw[k] = QwIn;
-    }
-    
-    void set_Qa( double QaIn ){
-        for(int k=0; k<9; k++) Qa[k] = 0.0;
-        for(int k=0; k<9; k+=4) Qa[k] = QaIn;
-    }
-    
-    void set_Rw( double RwIn ){
-        for(int k=0; k<9; k++) Rw[k] = 0.0;
-        for(int k=0; k<9; k+=4) Rw[k] = RwIn;
-    }
-    
-    void set_Ra( double RaIn ){
-        for(int k=0; k<9; k++) Ra[k] = 0.0;
-        for(int k=0; k<9; k+=4) Ra[k] = RaIn;
-    }
-  
     void set_chartUpdate( boolean chartUpdateIn ){
         chartUpdate = chartUpdateIn;
     }
@@ -133,6 +92,49 @@ public:
     }
 
 
+    void predict_covariance(const QuaternionD q_del){
+        // P in present (last) q-centered chart += Q
+        P[0]  += Qw*dt*dt*dt/3;         P[18] -= Qw*dt*dt/2;
+        P[7]  += Qw*dt*dt*dt/3;         P[25] -= Qw*dt*dt/2;
+        P[14] += Qw*dt*dt*dt/3;         P[32] -= Qw*dt*dt/2;
+
+        P[3]  -= Qw*dt*dt/2;            P[21] += Qw*dt;
+        P[10] -= Qw*dt*dt/2;            P[28] += Qw*dt;
+        P[17] -= Qw*dt*dt/2;            P[35] += Qw*dt;
+
+        // F =  [ R'(del) I*dt ]
+        //      [    0      I  ]
+        static double F[36];
+        F[0] = 1.0-2.0*q_del[2]*q_del[2]-2.0*q_del[3]*q_del[3];  F[6] = 2.0*(q_del[1]*q_del[2]+q_del[3]*q_del[0]);        F[12] = 2.0*(q_del[1]*q_del[3]-q_del[2]*q_del[0]);
+        F[1] = 2.0*(q_del[1]*q_del[2]-q_del[3]*q_del[0]);        F[7] = 1.0-2.0*q_del[1]*q_del[1]-2.0*q_del[3]*q_del[3];  F[13] = 2.0*(q_del[2]*q_del[3]+q_del[1]*q_del[0]);
+        F[2] = 2.0*(q_del[1]*q_del[3]+q_del[2]*q_del[0]);        F[8] = 2.0*(q_del[2]*q_del[3]-q_del[1]*q_del[0]);        F[14] = 1.0-2.0*q_del[1]*q_del[1]-2.0*q_del[2]*q_del[2];
+
+                                                        F[18] = dt;     F[24] =0.0;     F[30] = 0.0;
+                                                        F[19] = 0.0;    F[25] = dt;     F[31] = 0.0;
+                                                        F[20] = 0.0;    F[26] = 0.0;    F[32] = dt;
+
+        F[3] = 0.0;     F[9] = 0.0;     F[15] = 0.0;    F[21] = 1.0;    F[27] = 0.0;    F[33] = 0.0;
+        F[4] = 0.0;     F[10] = 0.0;    F[16] = 0.0;    F[22] = 0.0;    F[28] = 1.0;    F[34] = 0.0;
+        F[5] = 0.0;     F[11] = 0.0;    F[17] = 0.0;    F[23] = 0.0;    F[29] = 0.0;    F[35] = 1.0;
+        
+        // P = F*P*F' (= F*[P+Q]*F')
+        static double S[36];
+        for(int i=0; i<6; i++){
+            for(int j=0; j<6; j++){
+                double sum = 0.0;
+                for(int k=0; k<6; k++) sum += P[i+k*6]*F[j+k*6];
+                S[i*6+j] = sum;
+            }
+        }
+        for(int i=0; i<6; i++){
+            for(int j=0; j<6; j++){
+                double sum = 0.0;
+                for(int k=0; k<6; k++) sum += F[i+k*6]*S[k*6+j];
+                P[i+j*6] = sum;
+            }
+        }
+            
+    }
      // Method: updateIMU
   // method used to update the state information through an IMU measurement
   // inputs:
@@ -142,111 +144,40 @@ public:
   // outputs:
     void estimate_attitude(){
 
-        // we compute the state prediction
-        static double wnorm = sqrt( w[0]*w[0] + w[1]*w[1] + w[2]*w[2] );
-        static double qw[4];
-        if( wnorm != 0.0 ){
-            double wdt05 = 0.5*wnorm*dt;
-            double swdt = sin(wdt05)/wnorm;
-            qw[0] = cos(wdt05);
-            qw[1] = w[0]*swdt;
-            qw[2] = w[1]*swdt;
-            qw[3] = w[2]*swdt;
-        }else{
-            qw[0] = 1.0;
-            qw[1] = 0.0;
-            qw[2] = 0.0;
-            qw[3] = 0.0;
-        }
-        
-        static double qp[4];
-        qp[0] = q[0]*qw[0]  -  q[1]*qw[1]  -  q[2]*qw[2] - q[3]*qw[3];
-        qp[1] = q[0]*qw[1]  +  qw[0]*q[1]  +  q[2]*qw[3] - q[3]*qw[2];
-        qp[2] = q[0]*qw[2]  +  qw[0]*q[2]  +  q[3]*qw[1] - q[1]*qw[3];
-        qp[3] = q[0]*qw[3]  +  qw[0]*q[3]  +  q[1]*qw[2] - q[2]*qw[1];
-        
-        /*
-        *  we compute the covariance matrix for the state prediction
-        */
+        // compute the state prediction
+        static QuaternionD q_del, q_p; // used twice for prediction and for update. delta q
+        if( !w.is_zero() )
+            q_del.from_angular_velocity(w,dt);
+        else
+            q_del.initialise(); // No prediction just update!?
 
-        // P in last q-centered chart += Q
-        for(int j=0; j<3; j++){
-            for(int i=0; i<3; i++) P[i+j*6] += Qw[i+j*3]*dt*dt*dt/3;
-        }
-        for(int j=0; j<3; j++){
-            for(int i=3; i<6; i++) P[i+j*6] -= Qw[i-3+(j)*3]*dt*dt/2;
-        }
-        for(int j=3; j<6; j++){
-            for(int i=0; i<3; i++) P[i+j*6] -= Qw[i+(j-3)*3]*dt*dt/2;
-        }
-        for(int j=3; j<6; j++){
-            for(int i=3; i<6; i++) P[i+j*6] += Qw[i-3+(j-3)*3]*dt;
-        }
+        q_p = q * q_del;
 
-        // F =  [ R'(del) I*dt ]
-        //      [    0      I  ]
-        double F[9];
-        F[0] = -qw[2]*qw[2]-qw[3]*qw[3];    F[3] = qw[1]*qw[2]+qw[3]*qw[0];     F[6] = qw[1]*qw[3]-qw[2]*qw[0];
-        F[1] = qw[1]*qw[2]-qw[3]*qw[0];     F[4] = -qw[1]*qw[1]-qw[3]*qw[3];    F[7] = qw[2]*qw[3]+qw[1]*qw[0];
-        F[2] = qw[1]*qw[3]+qw[2]*qw[0];     F[5] = qw[2]*qw[3]-qw[1]*qw[0];     F[8] = -qw[1]*qw[1]-qw[2]*qw[2];
-        
-        F[0] += F[0] + 1.0;    F[3] += F[3];          F[6] += F[6];             // Why doubling like this?
-        F[1] += F[1];          F[4] += F[4] + 1.0;    F[7] += F[7];
-        F[2] += F[2];          F[5] += F[5];          F[8] += F[8] + 1.0;
+        // compute the covariance matrix for the state prediction
+        predict_covariance(q_del);
 
-        // F =  [ R'(del) I*dt ]
-        //      [    0      I  ]
-
-        double M[36];
-        M[0] = F[0];    M[6] = F[3];    M[12] = F[6];    M[18] = dt;     M[24] =0.0;     M[30] = 0.0;
-        M[1] = F[1];    M[7] = F[4];    M[13] = F[7];    M[19] = 0.0;    M[25] = dt;     M[31] = 0.0;
-        M[2] = F[2];    M[8] = F[5];    M[14] = F[8];    M[20] = 0.0;    M[26] = 0.0;    M[32] = dt;
-        M[3] = 0.0;     M[9] = 0.0;     M[15] = 0.0;     M[21] = 1.0;    M[27] = 0.0;    M[33] = 0.0;
-        M[4] = 0.0;     M[10] = 0.0;    M[16] = 0.0;     M[22] = 0.0;    M[28] = 1.0;    M[34] = 0.0;
-        M[5] = 0.0;     M[11] = 0.0;    M[17] = 0.0;     M[23] = 0.0;    M[29] = 0.0;    M[35] = 1.0;
-        
-        // P = F*P*F' (= F*[P+Q]*F')
-        double S[36];
-        for(int i=0; i<6; i++){
-            for(int j=0; j<6; j++){
-                double sum = 0.0;
-                for(int k=0; k<6; k++) sum += P[i+k*6]*M[j+k*6];
-                S[i*6+j] = sum;
-            }
-        }
-        for(int i=0; i<6; i++){
-            for(int j=0; j<6; j++){
-                double sum = 0.0;
-                for(int k=0; k<6; k++) sum += M[i+k*6]*S[k*6+j];
-                P[i+j*6] = sum;
-            }
-        }
-        
         /*
         *  we compute the measurement prediction
         */
 
         // Predicted Measurement
-        double ap[] = { qp[1]*qp[3]-qp[2]*qp[0] , qp[2]*qp[3]+qp[1]*qp[0] , -qp[1]*qp[1]-qp[2]*qp[2] };
-        ap[0] += ap[0];
-        ap[1] += ap[1];
-        ap[2] += ap[2] + 1.0;
+        // a_p = R'(q_pred)*[0 0 1]' = [0 0 1]*R'(q_pred)
+        static Vector3d a_p;
+        a_p = q_p.gravity_vector();
         
-        // H = [ [v_pred]x   0 ]  =  [ [ap]x    0 ]
-        //     [     0       I ]  =  [   0      I ]
-        F[0] = 0.0;       F[3] = -ap[2];    F[6] = ap[1];  // remove these lines? 
-        F[1] = ap[2];     F[4] = 0.0;       F[7] = -ap[0];
-        F[2] = -ap[1];    F[5] = ap[0];     F[8] = 0.0;
+        // H   = [ [a_p]x      0 ]
+        //       [     0       I ]
+        static double H[36]; 
+        static double M[36]; // P*H'
+        static double S[36]; // H*P*H' + [noise covariance]
+        H[0] = 0.0;      H[6] = -a_p[2];  H[12] = a_p[1];   H[18] = 0.0;    H[24] = 0.0;    H[30] = 0.0;
+        H[1] = a_p[2];   H[7] = 0.0;      H[13] = -a_p[0];  H[19] = 0.0;    H[25] = 0.0;    H[31] = 0.0;
+        H[2] = -a_p[1];  H[8] = a_p[0];   H[14] = 0.0;      H[20] = 0.0;    H[26] = 0.0;    H[32] = 0.0;
+        H[3] = 0.0;      H[9] = 0.0;      H[15] = 0.0;      H[21] = 1.0;    H[27] = 0.0;    H[33] = 0.0;
+        H[4] = 0.0;      H[10] = 0.0;     H[16] = 0.0;      H[22] = 0.0;    H[28] = 1.0;    H[34] = 0.0;
+        H[5] = 0.0;      H[11] = 0.0;     H[17] = 0.0;      H[23] = 0.0;    H[29] = 0.0;    H[35] = 1.0;
         
-        double H[36];
-        H[0] = F[0];    H[6] = F[3];    H[12] = F[6];    H[18] = 0.0;    H[24] = 0.0;    H[30] = 0.0;
-        H[1] = F[1];    H[7] = F[4];    H[13] = F[7];    H[19] = 0.0;    H[25] = 0.0;    H[31] = 0.0;
-        H[2] = F[2];    H[8] = F[5];    H[14] = F[8];    H[20] = 0.0;    H[26] = 0.0;    H[32] = 0.0;
-        H[3] = 0.0;     H[9] = 0.0;     H[15] = 0.0;     H[21] = 1.0;    H[27] = 0.0;    H[33] = 0.0;
-        H[4] = 0.0;     H[10] = 0.0;    H[16] = 0.0;     H[22] = 0.0;    H[28] = 1.0;    H[34] = 0.0;
-        H[5] = 0.0;     H[11] = 0.0;    H[17] = 0.0;     H[23] = 0.0;    H[29] = 0.0;    H[35] = 1.0;
-        
-        // H*P*H'
+        // M = P*H'
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++){
                 double sum = 0.0;
@@ -255,6 +186,7 @@ public:
                 M[i*6+j] = sum;
             }
         }
+        // S = H*M + noise
         for(int j=0; j<6; j++){
             for(int i=0; i<6; i++){
                 double sum = 0.0;
@@ -264,20 +196,19 @@ public:
             }
         }
         
-        // S = H*P*H' + [ R*Q*R+R  0 ;  0  R   ]
-        for(int j=0; j<3; j++){
-            for(int i=0; i<3; i++) 
-                S[i+j*6] += Qa[i+j*3] + Ra[i+j*3];
-        }
-        for(int j=3; j<6; j++){
-            for(int i=3; i<6; i++) 
-                S[i+j*6] += Rw[i-3+(j-3)*3];
-        }
+        // S = H*P*H' + [ R'*Qa*R + Ra*I , 0 ;  0 , Rw*I ]
+        // Qa is not passed through rotaion trnsform!? (in original implementation as well)
+        S[0]  += Qa + Ra;
+        S[7]  += Qa + Ra;
+        S[14] += Qa + Ra;
+        S[21] += Rw;
+        S[28] += Rw;
+        S[35] += Rw;
         
         /* 
         *   now we can compute the gain
         */
-        solve( S , M );  // now K is stored in M
+        compute_K( S , M );  // now K is stored in M
         
         /*
         *   Measure
@@ -285,19 +216,14 @@ public:
         mpu.read_accel();
         mpu.read_gyro();
 
-        static double am[3], wm[3];
-        am[0] = (double)mpu.UnitAccelBody.x;
-        am[1] = (double)mpu.UnitAccelBody.y;
-        am[2] = (double)mpu.UnitAccelBody.z;
-
-        wm[0] = (double)mpu.GyroRate.x;
-        wm[1] = (double)mpu.GyroRate.y;
-        wm[2] = (double)mpu.GyroRate.z;
+        static Vector3f a_m, w_m;
+        a_m = mpu.UnitAccelBody;
+        w_m = mpu.GyroRate; // these are float... hmm...
 
         /*
         *   Update the state in the chart
         */
-        double dy[] = { am[0]-ap[0] , am[1]-ap[1] , am[2]-ap[2] , wm[0]-w[0] , wm[1]-w[1] , wm[2]-w[2] };
+        double dy[] = { a_m[0]-a_p[0] , a_m[1]-a_p[1] , a_m[2]-a_p[2] , w_m[0]-w[0] , w_m[1]-w[1] , w_m[2]-w[2] };
         // x = 0 + K*(z-z)
         double dx[6];
         for(int i=0; i<6; i++){
@@ -309,28 +235,16 @@ public:
         /*
         * the updated point in the chart is mapped to a quaternion
         */
-        fC2M( dx , qw );  // now delta is stored in qw
-        
-        // q = q*delta = q*qw
-        q[0] = qp[0]*qw[0]  -  qp[1]*qw[1]  -  qp[2]*qw[2] - qp[3]*qw[3];
-        q[1] = qp[0]*qw[1]  +  qw[0]*qp[1]  +  qp[2]*qw[3] - qp[3]*qw[2];
-        q[2] = qp[0]*qw[2]  +  qw[0]*qp[2]  +  qp[3]*qw[1] - qp[1]*qw[3];
-        q[3] = qp[0]*qw[3]  +  qw[0]*qp[3]  +  qp[1]*qw[2] - qp[2]*qw[1];
-        
+        fC2M( dx , q_del );  // now delta is stored in q_del
+        q = q_p * q_del;
+        q.normalize();
         // and the angular velocity is updated in the usual way
         w[0] += dx[3];
         w[1] += dx[4];
         w[2] += dx[5];
-
-        // q[0] = qp[0];
-        // q[1] = qp[1];
-        // q[2] = qp[2];
-        // q[3] = qp[3];
-        // w[0] = wm[0];
-        // w[1] = wm[1];
-        // w[2] = wm[2];
         
         // the covariance matrix is updated in the chart centered in qp
+        //K*H
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++){
                 double sum = 0.0;
@@ -338,8 +252,9 @@ public:
                 S[i*6+j] = sum;
             }
         }
+        // I-K*H
         for(int k=0; k<36; k+=7) S[k] += 1.0;
-        
+        // (I - K*H)*P_predicted
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++){
                 double sum = 0.0;
@@ -351,7 +266,7 @@ public:
         if( chartUpdate ){
             // finally we update the covariance matrix from the chart centered in qp
             // quaternion to the chart centered in the updated q quaternion
-            chartUpdateMatrix( qw , H );  // now G is stored in H
+            chartUpdateMatrix( q_del , H );  // now G is stored in H
             
             S[0] = H[0];    S[6] = H[3];    S[12] = H[6];    S[18] = 0.0;    S[24] = 0.0;    S[30] = 0.0;
             S[1] = H[1];    S[7] = H[4];    S[13] = H[7];    S[19] = 0.0;    S[25] = 0.0;    S[31] = 0.0;
@@ -359,7 +274,7 @@ public:
             S[3] = 0.0;     S[9] = 0.0;     S[15] = 0.0;     S[21] = 1.0;    S[27] = 0.0;    S[33] = 0.0;
             S[4] = 0.0;     S[10] = 0.0;    S[16] = 0.0;     S[22] = 0.0;    S[28] = 1.0;    S[34] = 0.0;
             S[5] = 0.0;     S[11] = 0.0;    S[17] = 0.0;     S[23] = 0.0;    S[29] = 0.0;    S[35] = 1.0;
-            
+            // P_updated*[T(q_del) 0; 0 I]'
             for(int i=0; i<6; i++){
                 for(int j=0; j<6; j++){
                     double sum = 0.0;
@@ -367,7 +282,7 @@ public:
                     H[i*6+j] = sum;
                 }
             }
-            
+            // P_updated_in_q_updated_centered = [T(q_del) 0; 0 I]*P_updated*[T(q_del) 0; 0 I]'
             for(int j=0; j<6; j++){
                 for(int i=0; i<6; i++){
                     double sum = 0.0;
@@ -377,13 +292,6 @@ public:
             }
         } //chartUpdate
         
-        // we avoid numerical instabilities
-        double qnorm = sqrt( q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3] );
-        q[0] /= qnorm;
-        q[1] /= qnorm;
-        q[2] /= qnorm;
-        q[3] /= qnorm;
-        
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++) 
                 P[i+j*6] = 0.5*( M[i+j*6] + M[j+i*6] );
@@ -392,29 +300,29 @@ public:
         return;
     }
 
-    void solve( double* S , double* M ){
+    void compute_K( double* S , double* M ){
         // we first compute the Cholesky decomposition for transform the system from  K*S = M  into K*L*L' = M
         Cholesky( S );
         
         double y[6];
         // then we take each pair of rows of K and M independently
         for(int i=0; i<6; i++){
-        // first we solve (y*L' = M)
-        for(int j=0; j<6; j++){
-            double sum = 0.0;
-            for(int k=0; k<j; k++){
-                sum += y[k]*S[j+k*6];
+            // first we solve (y*L' = M)
+            for(int j=0; j<6; j++){
+                double sum = 0.0;
+                for(int k=0; k<j; k++){
+                    sum += y[k]*S[j+k*6];
+                }
+                y[j] = ( M[i*6+j] - sum )/S[j*7];
             }
-            y[j] = ( M[i*6+j] - sum )/S[j*7];
-        }
-        // now we solve (Ki*L = y)
-        for(int j=5; j>-1; j--){
-            double sum = 0.0;
-            for(int k=j+1; k<6; k++){
-                sum += M[i*6+k]*S[k+j*6];
+            // now we solve (Ki*L = y)
+            for(int j=5; j>-1; j--){
+                double sum = 0.0;
+                for(int k=j+1; k<6; k++){
+                    sum += M[i*6+k]*S[k+j*6];
+                }
+                M[i*6+j] = ( y[j] - sum )/S[j*7];
             }
-            M[i*6+j] = ( y[j] - sum )/S[j*7];
-        }
         }
         
         return;
@@ -452,7 +360,7 @@ public:
     //  e: point of the Euclidean space that we want to map to a unit quaternion
     // outputs:
     //  delta: quaternion mapped with the e point
-    void fC2M( double* e , double* delta ){
+    void fC2M( double* e , QuaternionD& delta ){
         // delta from the chart definition: Rotation Vector
         double enorm = sqrt( e[0]*e[0] + e[1]*e[1] + e[2]*e[2] );
         if( enorm > PI ){
@@ -485,7 +393,7 @@ public:
   //  delta: quaternion used to update the quaternion estimation
   // outputs:
   //  G: transformation matrix to update the covariance matrix
-    void chartUpdateMatrix( double* delta , double* G ){
+    void chartUpdateMatrix( QuaternionD& delta , double* G ){
         double dnorm = sqrt( delta[1]*delta[1] + delta[2]*delta[2] + delta[3]*delta[3] );
         if( dnorm != 0.0 ){
             double udelta[3];

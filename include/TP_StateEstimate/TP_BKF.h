@@ -87,6 +87,7 @@ public:
         mx = mag.UnitMagVect.x;
         my = mag.UnitMagVect.y;
         mz = mag.UnitMagVect.z;
+        // https://ahrs.readthedocs.io/en/latest/filters/complementary.html
         mag_yaw = atan2(mz*sin(accel_pitch)-my*cos(accel_pitch), 
                         mx*cos(accel_roll)+sin(accel_roll)*(my*sin(accel_pitch) + mz*cos(accel_pitch)));
         // KalmanGain = [cov(t+1|t)*C^T (C*cov(t+1|t)*C^T + sigma_measurement)^-1]

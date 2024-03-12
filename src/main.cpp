@@ -60,7 +60,7 @@
 
 #define DISPLAY_MODE MEKF_DISPLAY
 
-#define SERIAL_ON true
+#define SERIAL_ON false
 
 #if SERIAL_ON
     #define debug(x) Serial.print(x); Serial.print(" ");
@@ -77,8 +77,9 @@ uint32_t loop_timer;
 TP_BKF tp_bkf;
 TP_TRIAD tp_triad;
 TP_EKF tp_ekf;
-TP_Display tp_display;
 TP_MEKF tp_mekf;
+
+TP_Display tp_display;
 /*
 main
 */
@@ -88,30 +89,25 @@ void setup() {
     Wire.setClock(400000);
     Wire.begin();
     delay(250);
+    
+    // pinMode(13, OUTPUT);
+    // digitalWrite(13, LOW);
 
 #if SERIAL_ON
     Serial.begin(57600);
 #endif
 
-#if DISPLAY_MODE == BKF_DISPLAY
-    tp_display.euler_display_setup();
-#elif DISPLAY_MODE == ACC_MAG_BALL
-    tp_display.mag_acc_display_setup();
-#elif DISPLAY_MODE == TRIAD_DISPLAY
-    tp_display.triad_display_setup();
-#elif DISPLAY_MODE == EKF_DISPLAY || DISPLAY_MODE == MEKF_DISPLAY
-    tp_display.ekf_display_setup();
-#endif
-
-
-    debugln("Init and Calib Gyro");
+#if DISPLAY_MODE != 0
+    tp_display.display_setup(DISPLAY_MODE);
     tp_display.printStatus("Calibrating Gyro");
+#endif
+    debugln("Init and Calib Gyro");
+    
 #if TP_ESTIMATOR == BKF
     tp_bkf.init_sensors();
     tp_bkf.mpu.calibrate_gyro();
 #elif TP_ESTIMATOR ==TRIAD
     tp_triad.init_sensors();
-    tp_triad.mpu.calibrate_gyro();
 #elif TP_ESTIMATOR == EKF
     tp_ekf.init_sensors();
     tp_ekf.init_estimator();
@@ -123,13 +119,6 @@ void setup() {
     tp_mekf.mpu.calibrate_gyro();
     // tp_mekf.mag.set_m_ref();
 #endif
-    // pinMode(13, OUTPUT);
-    // digitalWrite(13, HIGH);
-    
-    
-    // tp_display.printVector(tp_ekf.mpu.GyroOffset, 10, 100);
-
-
 
 
     // debugln("Calibrating Baro");
@@ -138,6 +127,7 @@ void setup() {
     // Serial.println(BaroAltOffset);
     // Serial.println("Baro Calibration Done");
     tp_display.printStatus("Estimator Running");
+    // digitalWrite(13, HIGH);
 }
 
 void loop() {
@@ -200,7 +190,6 @@ void loop() {
     // tp_display.printVector(tp_ekf.v_m, 10, 150, ILI9341_MAGENTA);
     // tp_display.printVector(tp_ekf.mpu.GyroRate, 280, 50);
 #endif
-    tp_display.printTime(micros() - loop_timer);
 
 
     // rot += rot*0.001;
@@ -295,8 +284,10 @@ void loop() {
 
 
     // Serial.print("T");
-    // Serial.print(micros() - loop_timer);
+    debugln(micros() - loop_timer);
+#if DISPLAY_MODE != 0
+    tp_display.printTime(micros() - loop_timer);
+#endif
 
-    while (micros() - loop_timer < Tus)
-    ;
+    while (micros() - loop_timer < Tus);
 }

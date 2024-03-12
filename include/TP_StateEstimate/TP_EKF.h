@@ -444,8 +444,8 @@ public:
         v_a = mpu.UnitAccelBody - y_a;
         v_m = mag.UnitMagVect - y_m;
         
-        static Vector4 q_new;
-        q_new = K_times(v_a, v_m);
+        // static Vector4 q_new;
+        // q_new = K_times(v_a, v_m);
         // Quaternion q_del;
         // q_del.q1 = q_new.v[0];
         // q_del.q2 = q_new.v[1];

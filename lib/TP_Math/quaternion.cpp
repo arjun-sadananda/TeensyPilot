@@ -416,6 +416,16 @@ void QuaternionT<T>::earth_to_body(Vector3<T> &v) const
     rotation_matrix(m);
     v = m * v;
 }
+//NED frame gravity vector. Used for getting predicted accel reading.
+template <typename T>
+Vector3<T> QuaternionT<T>::gravity_vector() const
+{
+    Vector3<T> ret;
+    ret.x = 2.0 * (q2*q4 - q3*q1);
+    ret.y = 2.0 * (q3*q4 + q2*q1);
+    ret.z = 1.0 - 2.0 * (q2*q2 + q3*q3);
+    return ret;
+}
 
 // create a quaternion from Euler angles
 template <typename T>
