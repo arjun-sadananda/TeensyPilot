@@ -15,7 +15,7 @@
 
 // Thanks to: https://github.com/PBernalPolo/test_MKF.git
 
-class TP_MEKF
+class TP_MEKF2
 {
 private:
 protected:
@@ -30,13 +30,13 @@ protected:
     // covariance matrix of the angular velocity noise (rad^2/s^3)
     double Qw;
     // covariance matrix of the acceleration noise (g^2)
-    double Qa;
+    double Qa, Qm;
     // covariance matrix of the angular velocity measurement noise (rad^2/s^2)
     double Rw;
     // covariance matrix of the acceleration measurement noise (g^2)
-    double Ra;
+    double Ra, Rm;
     // use or not the chart update
-    boolean chartUpdate = true;
+    boolean chartUpdate = false;
     const double dt = 0.01;
 
     // Quaternion quat;
@@ -44,10 +44,10 @@ protected:
 public:
     // covariance matrix
     double P[36];
-    double K[36];
-    Vector3d a_p;
-    Vector3f a_m, w_m;
-    TP_MEKF(){
+    double K[54];
+    Vector3d a_p, m_p;
+    Vector3f a_m, m_m, w_m, m_ref;
+    TP_MEKF2(){
         q[0] = 1.0;   q[1] = 0.0;   q[2] = 0.0;   q[3] = 0.0;
         // it is necessary to set an angular velocity different from 0.0 to break the symmetry
         // otherwise, the MUKF could not converge (especially when we apply the "reset operation" with the RV chart)
@@ -59,8 +59,10 @@ public:
         
         Qw = 1.0e1;
         Qa = 0.0;
+        Qm = 0.0;
         Rw = 1.0e-3; // Gyro Measure Noise
         Ra = 1.0e-3;
+        Rm = 10.0e-3;
     }
 
     Quaternion get_q(){
@@ -91,6 +93,9 @@ public:
         // q[1] = 0.0;
         // q[2] = 0.0;
         // q[3] = 0.0;
+        m_ref = mag.m_ref;
+        m_ref = (mpu.a_ref%m_ref).normalized()%mpu.a_ref;
+
     }
 
 
@@ -166,76 +171,94 @@ public:
         // Predicted Measurement
         // a_p = R'(q_pred)*[0 0 1]' = [0 0 1]*R'(q_pred)
         // a_p = q_p.gravity_vector();
-        // a_p = mpu.a_ref.todouble();
-        a_p = mag.m_ref.todouble();
+        a_p = mpu.a_ref.todouble();
+        m_p = m_ref.todouble();
         q_p.inverse().earth_to_body(a_p);
+        q_p.inverse().earth_to_body(m_p);
         
         // H   = [ [a_p]x      0 ]
         //       [     0       I ]
-        static double H[36]; 
-        static double M[36]; // P*H'
-        static double S[36]; // H*P*H' + [noise covariance]
-        H[0] = 0.0;      H[6] = -a_p[2];  H[12] = a_p[1];   H[18] = 0.0;    H[24] = 0.0;    H[30] = 0.0;
-        H[1] = a_p[2];   H[7] = 0.0;      H[13] = -a_p[0];  H[19] = 0.0;    H[25] = 0.0;    H[31] = 0.0;
-        H[2] = -a_p[1];  H[8] = a_p[0];   H[14] = 0.0;      H[20] = 0.0;    H[26] = 0.0;    H[32] = 0.0;
-        H[3] = 0.0;      H[9] = 0.0;      H[15] = 0.0;      H[21] = 1.0;    H[27] = 0.0;    H[33] = 0.0;
-        H[4] = 0.0;      H[10] = 0.0;     H[16] = 0.0;      H[22] = 0.0;    H[28] = 1.0;    H[34] = 0.0;
-        H[5] = 0.0;      H[11] = 0.0;     H[17] = 0.0;      H[23] = 0.0;    H[29] = 0.0;    H[35] = 1.0;
+        static double H[54]; 
+        static double M[54]; // P*H'
+        static double S[81]; // H*P*H' + [noise covariance]
+        H[0] = 0.0;      H[9] = -m_p[2];   H[18] = m_p[1];   H[27] = 0.0;    H[36] = 0.0;    H[45] = 0.0;
+        H[1] = m_p[2];   H[10] = 0.0;      H[19] = -m_p[0];  H[28] = 0.0;    H[37] = 0.0;    H[46] = 0.0;
+        H[2] = -m_p[1];  H[11] = m_p[0];   H[20] = 0.0;      H[29] = 0.0;    H[38] = 0.0;    H[47] = 0.0;
+        H[3] = 0.0;      H[12] = -a_p[2];  H[21] = a_p[1];   H[30] = 0.0;    H[39] = 0.0;    H[48] = 0.0;
+        H[4] = a_p[2];   H[13] = 0.0;      H[22] = -a_p[0];  H[31] = 0.0;    H[40] = 0.0;    H[49] = 0.0;
+        H[5] = -a_p[1];  H[14] = a_p[0];   H[23] = 0.0;      H[32] = 0.0;    H[41] = 0.0;    H[50] = 0.0;
+        H[6] = 0.0;      H[15] = 0.0;      H[24] = 0.0;      H[33] = 1.0;    H[42] = 0.0;    H[51] = 0.0;
+        H[7] = 0.0;      H[16] = 0.0;      H[25] = 0.0;      H[34] = 0.0;    H[43] = 1.0;    H[52] = 0.0;
+        H[8] = 0.0;      H[17] = 0.0;      H[26] = 0.0;      H[35] = 0.0;    H[44] = 0.0;    H[53] = 1.0;
         
-        // M = P*H'
+        // M = P*H'     6x9 = 6x6 * 6x9  === <- || * ===
         for(int i=0; i<6; i++){
-            for(int j=0; j<6; j++){
+            for(int j=0; j<9; j++){
                 double sum = 0.0;
                 for(int k=0; k<6; k++) 
-                    sum += P[i+k*6]*H[j+k*6];
-                M[i*6+j] = sum;
+                    sum += P[i+k*6]*H[j+k*9];
+                M[i*9+j] = sum;
             }
         }
-        // S = H*M + noise
-        for(int j=0; j<6; j++){
-            for(int i=0; i<6; i++){
+        // for(int i =0; i<54; i++){
+        //     Serial.print(M[i]);
+        //     Serial.print(" ");
+        // }
+        // S = H*M + noise   9x6 * 6x9  
+        for(int j=0; j<9; j++){
+            for(int i=0; i<9; i++){
                 double sum = 0.0;
                 for(int k=0; k<6; k++) 
-                    sum += H[i+k*6]*M[k*6+j];
-                S[i+j*6] = sum;
+                    sum += H[i+k*9]*M[k*9+j];
+                S[i+j*9] = sum;
             }
         }
         
+
         // S = H*P*H' + [ R'*Qa*R + Ra*I , 0 ;  0 , Rw*I ]
         // Qa is not passed through rotaion trnsform!? (in original implementation as well)
-        S[0]  += Qa + Ra;
-        S[7]  += Qa + Ra;
-        S[14] += Qa + Ra;
-        S[21] += Rw;
-        S[28] += Rw;
-        S[35] += Rw;
-        
+        S[0]   += Qm + Rm;
+        S[10]  += Qm + Rm;
+        S[20]  += Qm + Rm;
+        S[30]  += Qa + Ra;
+        S[40]  += Qa + Ra;
+        S[50]  += Qa + Ra;
+        S[60]  += Rw;
+        S[70]  += Rw;
+        S[80]  += Rw;
         /* 
         *   now we can compute the gain
         */
+        // for(int i =0; i<9; i++){
+        //     Serial.print(S[i*10]);
+        //     Serial.print(" ");
+        // }
         compute_K( S , M );  // now K is stored in not M -> K
-        
         /*
         *   Measure
         */
-        mpu.read_accel();
         mag.read_mag();
+        mpu.read_accel();
         mpu.read_gyro();
 
-        // a_m = mpu.UnitAccelBody;
-        a_m = mag.UnitMagVect;
+        m_m = mag.UnitMagVect;
+        a_m = mpu.UnitAccelBody;
         w_m = mpu.GyroRate; // these are float... hmm...
+
+        m_m = (a_m%m_m).normalized()%a_m;
 
         /*
         *   Update the state in the chart
         */
-        double dy[] = { a_m[0]-a_p[0] , a_m[1]-a_p[1] , a_m[2]-a_p[2] , w_m[0]-w[0] , w_m[1]-w[1] , w_m[2]-w[2] };
+        double dy[] = { m_m[0]-m_p[0], m_m[1]-m_p[1], m_m[2]-m_p[2], a_m[0]-a_p[0] , a_m[1]-a_p[1] , a_m[2]-a_p[2] , w_m[0]-w[0] , w_m[1]-w[1] , w_m[2]-w[2] };
         // x = 0 + K*(z-z)
         double dx[6];
         for(int i=0; i<6; i++){
             double sum = 0.0;
-            for(int j=0; j<6; j++) sum += K[i*6+j]*dy[j];
+            for(int j=0; j<9; j++) sum += K[i*9+j]*dy[j];
             dx[i] = sum;
+            // Serial.print(dx[i]);
+            // Serial.print(" ");
         }
         
         /*
@@ -248,56 +271,28 @@ public:
         w[0] += dx[3];
         w[1] += dx[4];
         w[2] += dx[5];
+        // w = w_m.todouble();
         
         // the covariance matrix is updated in the chart centered in qp
+        static double T[36];
         //S = -K*H
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++){
                 double sum = 0.0;
-                for(int k=0; k<6; k++) sum -= K[i*6+k]*H[k+j*6];
-                S[i*6+j] = sum;
+                for(int k=0; k<9; k++) sum -= K[i*9+k]*H[k+j*9];
+                T[i*6+j] = sum;
             }
         }
         // S = I-K*H
-        for(int k=0; k<36; k+=7) S[k] += 1.0;
+        for(int k=0; k<36; k+=7) T[k] += 1.0;
         // P_updated_in_q_predicted_centered = (I - K*H)*P_predicted
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++){
                 double sum = 0.0;
-                for(int k=0; k<6; k++) sum += S[i*6+k]*P[k+j*6];
+                for(int k=0; k<6; k++) sum += T[i*6+k]*P[k+j*6];
                 M[i+j*6] = sum;
             }
         }
-        
-        if( chartUpdate ){
-            // finally we update the covariance matrix from the chart centered in qp
-            // quaternion to the chart centered in the updated q quaternion
-            chartUpdateMatrix( q_del , H );  // now G is stored in H
-            
-            S[0] = H[0];    S[6] = H[3];    S[12] = H[6];    S[18] = 0.0;    S[24] = 0.0;    S[30] = 0.0;
-            S[1] = H[1];    S[7] = H[4];    S[13] = H[7];    S[19] = 0.0;    S[25] = 0.0;    S[31] = 0.0;
-            S[2] = H[2];    S[8] = H[5];    S[14] = H[8];    S[20] = 0.0;    S[26] = 0.0;    S[32] = 0.0;
-            S[3] = 0.0;     S[9] = 0.0;     S[15] = 0.0;     S[21] = 1.0;    S[27] = 0.0;    S[33] = 0.0;
-            S[4] = 0.0;     S[10] = 0.0;    S[16] = 0.0;     S[22] = 0.0;    S[28] = 1.0;    S[34] = 0.0;
-            S[5] = 0.0;     S[11] = 0.0;    S[17] = 0.0;     S[23] = 0.0;    S[29] = 0.0;    S[35] = 1.0;
-            // P_updated_in_q_predicted_centered*[T(q_del) 0; 0 I]'
-            for(int i=0; i<6; i++){
-                for(int j=0; j<6; j++){
-                    double sum = 0.0;
-                    for(int k=0; k<6; k++) sum += M[i+k*6]*S[j+k*6];
-                    H[i*6+j] = sum;
-                }
-            }
-            // P_updated_in_q_updated_centered = [T(q_del) 0; 0 I]*P_updated_in_q_predicted_centered*[T(q_del) 0; 0 I]'
-            for(int j=0; j<6; j++){
-                for(int i=0; i<6; i++){
-                    double sum = 0.0;
-                    for(int k=0; k<6; k++) sum += S[i+k*6]*H[k*6+j];
-                    M[i+j*6] = sum;
-                }
-            }
-        } //chartUpdate
-        
         // Make symmetric
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++) 
@@ -309,54 +304,64 @@ public:
 
     void compute_K( double* S , double* M ){
         // we first compute the Cholesky decomposition for transform the system from  K*S = M  into K*L*L' = M
-        Cholesky( S );
-        
-        double y[6];
+        Cholesky9( S );
+        // for(int i =0; i<9; i++){
+        //     Serial.print(S[i*10]);
+        //     Serial.print(" ");
+        // }
+        double y[9];
         // then we take each pair of rows of K and M independently
         for(int i=0; i<6; i++){
             // first we solve (y*L' = M)
-            for(int j=0; j<6; j++){
+            for(int j=0; j<9; j++){
                 double sum = 0.0;
                 for(int k=0; k<j; k++){
-                    sum += y[k]*S[j+k*6];
+                    sum += y[k]*S[j+k*9];
                 }
-                y[j] = ( M[i*6+j] - sum )/S[j*7];
+                y[j] = ( M[i*9+j] - sum )/S[j*10];
             }
             // now we solve (Ki*L = y)
-            for(int j=5; j>-1; j--){
+            for(int j=8; j>-1; j--){
                 double sum = 0.0;
-                for(int k=j+1; k<6; k++){
-                    sum += M[i*6+k]*S[k+j*6];
+                for(int k=j+1; k<9; k++){
+                    sum += M[i*9+k]*S[k+j*9];
                 }
-                M[i*6+j] = ( y[j] - sum )/S[j*7];
+                M[i*9+j] = ( y[j] - sum )/S[j*10];
             }
         }
-        for(int i=0; i<36; i++)
-                K[i]=M[i];
+        for(int i=0; i<54; i++){
+            K[i]=M[i];
+            
+            // Serial.print(K[i]);
+            // Serial.print(" ");
+        }
+            
         return;
     }
 
-    void Cholesky( double* S ){
+    void Cholesky9( double* S ){
         // for each column
-        for(int j=0; j<6; j++){
+        for(int j=0; j<9; j++){
             double sum = 0.0;  //sum for the diagonal term
             // we first fill with 0.0 until diagonal
             for(int i=0; i<j; i++){
-                S[i+j*6] = 0.0;
+                S[i+j*9] = 0.0;
                 //we can compute this sum at the same time
-                sum += S[j+i*6]*S[j+i*6];
+                sum += S[j+i*9]*S[j+i*9];
             }
             // now we compute the diagonal term
-            S[j*7] = sqrt( S[j*7] - sum ); //S[j+j*m] = sqrt( S[j+j*m] - sum );
+
+            S[j*10] = sqrt( S[j*10] - sum ); //S[j+j*m] = sqrt( S[j+j*m] - sum );
+
             // finally we compute the terms below the diagonal
-            for(int i=j+1; i<6; i++){
+            for(int i=j+1; i<9; i++){
                 //first the sum
                 sum = 0.0;
                 for(char k=0; k<j; k++){
-                    sum += S[i+k*6]*S[j+k*6];
+                    sum += S[i+k*9]*S[j+k*9];
                 }
                 //after the non-diagonal term
-                S[i+j*6] = ( S[i+j*6] - sum )/S[j*7];
+                S[i+j*9] = ( S[i+j*9] - sum )/S[j*10];
             }
         }//end j
         return;

@@ -17,6 +17,7 @@
 #define TRIAD_DISPLAY 3
 #define EKF_DISPLAY 4
 #define MEKF_DISPLAY 5
+#define MEKF2_DISPLAY 6
 
 
 class TP_Display{
@@ -71,6 +72,7 @@ public:
             case TRIAD_DISPLAY:
             case EKF_DISPLAY:
             case MEKF_DISPLAY:
+            case MEKF2_DISPLAY:
                 ball_and_cube_setup();
                 break;
         }
@@ -174,9 +176,9 @@ public:
         else
             drawNeedle(acc_vect.normalized()*ball_size, ILI9341_BLUE);
         if(mag_vect.z<0)
-            drawNeedle(mag_vect.normalized()*ball_size, ILI9341_ORANGE);
+            drawNeedle(mag_vect.normalized()*ball_size, ILI9341_CYAN);
         else
-            drawNeedle(mag_vect.normalized()*ball_size, ILI9341_RED);
+            drawNeedle(mag_vect.normalized()*ball_size, ILI9341_BLUE);
         old_acc_vect = acc_vect;
         old_mag_vect = mag_vect;
     }
@@ -189,9 +191,9 @@ public:
         drawNeedle(old_acc_vect2.normalized()*ball_size, ILI9341_BLACK);
         drawNeedle(old_mag_vect2.normalized()*ball_size, ILI9341_BLACK);
         if(acc_vect.z>0)
-            drawNeedle(acc_vect.normalized()*ball_size, ILI9341_GREEN);
+            drawNeedle(acc_vect.normalized()*ball_size, ILI9341_PINK);
         else
-            drawNeedle(acc_vect.normalized()*ball_size, ILI9341_DARKGREEN);
+            drawNeedle(acc_vect.normalized()*ball_size, ILI9341_MAGENTA);
         if(mag_vect.z<0)
             drawNeedle(mag_vect.normalized()*ball_size, ILI9341_PINK);
         else
