@@ -19,7 +19,6 @@
 #define MEKF_DISPLAY 5
 #define MEKF2_DISPLAY 6
 
-
 class TP_Display{
 
 private:

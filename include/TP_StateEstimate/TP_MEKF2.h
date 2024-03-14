@@ -1,11 +1,5 @@
 #pragma once
 
-#include "vector3.h"
-// #include "matrix4.h"
-#include "quaternion.h"
-#include "TP_Sense\TP_MPU6050.h"
-#include "TP_Sense\TP_Mag5883.h"
-#include "TP_Sense\TP_BMP280.h"
 #include <Arduino.h>
 #include "Wire.h"
 // #include "matrixN.h"
@@ -37,7 +31,6 @@ protected:
     double Ra, Rm;
     // use or not the chart update
     boolean chartUpdate = false;
-    const double dt = 0.01;
 
     // Quaternion quat;
 
@@ -46,7 +39,7 @@ public:
     double P[36];
     double K[54];
     Vector3d a_p, m_p;
-    Vector3f a_m, m_m, w_m, m_ref;
+    Vector3f a_m, m_m, w_m, a_ref, m_ref;
     TP_MEKF2(){
         q[0] = 1.0;   q[1] = 0.0;   q[2] = 0.0;   q[3] = 0.0;
         // it is necessary to set an angular velocity different from 0.0 to break the symmetry
@@ -75,17 +68,10 @@ public:
     void set_chartUpdate( boolean chartUpdateIn ){
         chartUpdate = chartUpdateIn;
     }
-
-    MPU6050 mpu;
-    Mag5883 mag;
-
-    void init_sensors(){
-        mpu.mpu_setup();
-        mag.mag_setup();
-        delay(250); 
+    
+    void init_estimator(const Vector3f a_r, const Vector3f m_r){
         // Introduce Gyro Only Mode
-    }
-    void init_estimator(){
+
         // R[0] = R[1] = R[2] = sq(mpu.std_dev_accel);
         // R[3] = R[4] = R[5] = sq(mag.std_dev_mag);
         // sigma_gyro = mpu.std_dev_gyro;
@@ -93,13 +79,12 @@ public:
         // q[1] = 0.0;
         // q[2] = 0.0;
         // q[3] = 0.0;
-        m_ref = mag.m_ref;
-        m_ref = (mpu.a_ref%m_ref).normalized()%mpu.a_ref;
-
+        a_ref = a_r;
+        m_ref = (a_r%m_r).normalized()%a_r;
     }
 
 
-    void predict_covariance(const QuaternionD q_del){
+    void predict_covariance(const QuaternionD q_del, const double dt){
         // P in present (last) q-centered chart += Q
         P[0]  += Qw*dt*dt*dt/3;         P[18] -= Qw*dt*dt/2;
         P[7]  += Qw*dt*dt*dt/3;         P[25] -= Qw*dt*dt/2;
@@ -150,7 +135,7 @@ public:
   //  wm: measured angular velocity (rad/s)
   //  dt: time step from the last update (s)
   // outputs:
-    void estimate_attitude(){
+    void estimate_attitude(Vector3f mag, Vector3f acc, Vector3f gyro, const double dt){
 
         // compute the state prediction
         static QuaternionD q_del, q_p; // used twice for prediction and for update. delta q
@@ -162,7 +147,7 @@ public:
         q_p = q * q_del;
 
         // compute the covariance matrix for the state prediction
-        predict_covariance(q_del);
+        predict_covariance(q_del, dt);
 
         /*
         *  we compute the measurement prediction
@@ -171,7 +156,7 @@ public:
         // Predicted Measurement
         // a_p = R'(q_pred)*[0 0 1]' = [0 0 1]*R'(q_pred)
         // a_p = q_p.gravity_vector();
-        a_p = mpu.a_ref.todouble();
+        a_p = a_ref.todouble();
         m_p = m_ref.todouble();
         q_p.inverse().earth_to_body(a_p);
         q_p.inverse().earth_to_body(m_p);
@@ -237,13 +222,9 @@ public:
         /*
         *   Measure
         */
-        mag.read_mag();
-        mpu.read_accel();
-        mpu.read_gyro();
-
-        m_m = mag.UnitMagVect;
-        a_m = mpu.UnitAccelBody;
-        w_m = mpu.GyroRate; // these are float... hmm...
+        m_m = mag;
+        a_m = acc;
+        w_m = gyro; // these are float... hmm...
 
         m_m = (a_m%m_m).normalized()%a_m;
 

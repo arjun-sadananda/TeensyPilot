@@ -1,69 +1,18 @@
 // #include <zephyr.h>
 #include <Arduino.h>
 
-// void main(void)
-// {
-// }
-
-// int main(void)
-// {
-//     init();
-
-// #if defined(USBCON)
-//     USBDevice.attach();
-// #endif
-    
-//     setup();
-    
-//     for (;;) {
-//         loop();
-//         if (serialEventRun) serialEventRun();
-//     }
-        
-//     return 0;
-// }
-
-// #include "TP_vector3.h"
-// #include "TP_matrix3.h"
-// #include "TP_vectorN.h"
-// #include "TP_matrixN.h"
-// #include "TP_MPU6050.h"
-// #include "TP_Mag5883.h"
-// #include "TP_BMP280.h"
 #include "AP_Math.h"
-#include "TP_StateEstimate\TP_BKF.h"
-#include "TP_StateEstimate\TP_TRIAD.h"
-#include "TP_StateEstimate\TP_EKF.h"
-#include "TP_StateEstimate\TP_MEKF.h"
-#include "TP_StateEstimate\TP_MEKF2.h"
 #include "TP_Display\TP_Display.h"
+#include "TP_StateEstimate\TP_ESTIMATOR.h"
 #include "Wire.h"
 
 // #define DEBUG_MODE true
 // #define DEBUG_AHRS true
 // #define DEBUG_ALT_EST true
 
-#define BKF_DIPLAY true
-
-#define BKF 0
-#define TRIAD 1 
-#define EKF 2
-#define MEKF 3
-#define MEKF2 4
-
-#define TP_ESTIMATOR MEKF2
-
-#define NO_DISPLAY 0
-#define ACC_MAG_BALL 1
-#define BKF_DISPLAY 2
-#define TRIAD_DISPLAY 3
-#define EKF_DISPLAY 4
-#define MEKF_DISPLAY 5
-#define MEKF2_DISPLAY 6
-
-#define DISPLAY_MODE MEKF2_DISPLAY
-
-#define SERIAL_ON true
+#define DISPLAY_ON true
+const int display_type = MEKF2_DISPLAY; 
+#define SERIAL_ON false
 
 #if SERIAL_ON
     #define debug(x) Serial.print(x); Serial.print(" ");
@@ -74,15 +23,7 @@
 #endif
 
 uint32_t loop_timer;
-
-#define Tus 10000
-
-TP_BKF tp_bkf;
-TP_TRIAD tp_triad;
-TP_EKF tp_ekf;
-TP_MEKF tp_mekf;
-TP_MEKF2 tp_mekf2;
-
+TP_ESTIMATOR tp_estimator;
 TP_Display tp_display;
 
 int display_skip_count = 0;
@@ -103,84 +44,29 @@ void setup() {
     Serial.begin(57600);
 #endif
 
-#if DISPLAY_MODE != 0
-    tp_display.display_setup(DISPLAY_MODE);
+#if DISPLAY_ON
+    tp_display.display_setup(display_type);
     tp_display.printStatus("Calibrating Gyro");
 #endif
-    debugln("Init and Calib Gyro");
+    debugln("Init and Calib Sensors");
     
-#if TP_ESTIMATOR == BKF
-    tp_bkf.init_sensors();
-    tp_bkf.mpu.calibrate_gyro();
-#elif TP_ESTIMATOR ==TRIAD
-    tp_triad.init_sensors();
-#elif TP_ESTIMATOR == EKF
-    tp_ekf.init_sensors();
-    tp_ekf.init_estimator();
-    tp_ekf.mpu.calibrate_gyro();
-    tp_ekf.mag.set_m_ref();
-#elif TP_ESTIMATOR == MEKF
-    tp_mekf.init_sensors();
-    tp_mekf.init_estimator();
-    tp_mekf.mpu.calibrate_gyro();
-    tp_mekf.mag.set_m_ref();
-#elif TP_ESTIMATOR == MEKF2
-    tp_mekf2.init_sensors();
-    tp_mekf2.mpu.calibrate_gyro();
-    tp_mekf2.mag.set_m_ref();
-    tp_mekf2.init_estimator();
-#endif
+    tp_estimator.init_sensors();
+    tp_estimator.init_estimator();
 
-
-    // debugln("Calibrating Baro");
-    // tp_display.printStatus("Calibrating Baro");
-    // tp_bkf.baro.calibrate_baro();
-    // Serial.println(BaroAltOffset);
-    // Serial.println("Baro Calibration Done");
     tp_display.printStatus("Estimator Running");
-    // digitalWrite(13, HIGH);
-    // loop_timer = micros();
-    // tp_mekf2.estimate_attitude();
-    // Serial.println();
-    // while (micros() - loop_timer < Tus);
-
-    // loop_timer = micros();
-    // tp_mekf2.estimate_attitude();
-    // Serial.println();
-    // while (micros() - loop_timer < Tus);
-
-    //     loop_timer = micros();
-    // tp_mekf2.estimate_attitude();
-    // Serial.println();
-    // while (micros() - loop_timer < Tus);
-
-    //     loop_timer = micros();
-    // tp_mekf2.estimate_attitude();
-    // Serial.println();
-    // while (micros() - loop_timer < Tus);
 
 }
 
 void loop() {
     loop_timer = micros();
 
-#if TP_ESTIMATOR == BKF
-    tp_bkf.attitude_estimate();
-    tp_bkf.vert_state_estimate();
-#elif TP_ESTIMATOR == TRIAD
-    tp_triad.estimate();
-#elif TP_ESTIMATOR == EKF
-    tp_ekf.attitude_estimate();
-#elif TP_ESTIMATOR == MEKF
-    tp_mekf.estimate_attitude();
-#elif TP_ESTIMATOR == MEKF2
-    tp_mekf2.estimate_attitude();
-#endif
+    tp_estimator.read_sensors();
+    tp_estimator.estimate_attitude();
 
     // ------------------- For Serial Plotter -------------------------
     if(display_skip_count > 5){
-#if DISPLAY_MODE == BKF_DISPLAY
-    tp_display.draw_euler_deg(tp_bkf.attitude_euler.x, tp_bkf.attitude_euler.y, tp_bkf.attitude_euler.z);
+#if ESTIMATOR == BKF && DISPLAY_ON
+    tp_display.draw_euler_deg(tp_estimator.tp_bkf.attitude_euler.x, tp_estimator.tp_bkf.attitude_euler.y, tp_estimator.tp_bkf.attitude_euler.z);
     // rot.x = tp_bkf.attitude_euler.y;
     // rot.y = tp_bkf.attitude_euler.x;
     // rot.z = tp_bkf.attitude_euler.z;
@@ -191,46 +77,47 @@ void loop() {
     // q.from_euler(rot);//*AP_DEG_TO_RAD);
     // a = tp_bkf.mpu.AccelBody;
     // m = tp_bkf.mag.UnitMagVect;
-    tp_display.drawCube(tp_bkf.accel_roll, tp_bkf.accel_pitch, 0);
-    debug(tp_bkf.accel_roll);
-    debug(tp_bkf.accel_pitch);
-    debugln(tp_bkf.mag_yaw);
-#elif DISPLAY_MODE == ACC_MAG_BALL
-    tp_display.draw_acc_mag_in_ball(tp_triad.mpu.UnitAccelBody, tp_triad.mag.UnitMagVect);
-    tp_display.printVector(tp_triad.mpu.UnitAccelBody, 280, 50);
-    tp_display.printVector(tp_triad.mag.UnitMagVect, 280, 100);
-#elif DISPLAY_MODE == TRIAD_DISPLAY
-    tp_display.draw_acc_mag_in_ball(tp_triad.mpu.UnitAccelBody, tp_triad.mag.UnitMagVect);
+    tp_display.drawCube(tp_estimator.tp_bkf.accel_roll, tp_estimator.tp_bkf.accel_pitch, 0);
+    debug(tp_estimator.tp_bkf.accel_roll);
+    debug(tp_estimator.tp_bkf.accel_pitch);
+    debugln(tp_estimator.tp_bkf.mag_yaw);
+#elif ESTIMATOR == TRIAD && DISPLAY_ON
+    tp_display.draw_acc_mag_in_ball(tp_estimator.mpu.UnitAccelBody, tp_estimator.mag.UnitMagVect);
+    tp_display.draw_acc_mag_in_ball2(tp_estimator.tp_triad.c2, tp_estimator.tp_triad.m);
+    tp_display.printVector(tp_estimator.mpu.UnitAccelBody, 10, 80);
+    tp_display.printVector(tp_estimator.mag.UnitMagVect, 10, 150);
+// #elif ESTIMATOR == TRIAD && DISPLAY_ON
+    // tp_display.draw_acc_mag_in_ball(tp_estimator.mpu.UnitAccelBody, tp_estimator.mag.UnitMagVect);
+    // tp_display.draw_acc_mag_in_ball2(tp_estimator.tp_triad.c2, tp_estimator.tp_triad.m);
     // Transposed to display cude as fixed and display moving
-    tp_display.drawCube(tp_triad.DCM.transposed());
-#elif DISPLAY_MODE == EKF_DISPLAY
-    tp_display.drawCube(tp_ekf.q.tofloat());
-    tp_display.draw_acc_mag_in_ball(tp_ekf.a_m.tofloat(), tp_ekf.m_m.tofloat());
-    tp_display.draw_acc_mag_in_ball2(tp_ekf.a_p.tofloat(), tp_ekf.m_p.tofloat());
+    tp_display.drawCube(tp_estimator.tp_triad.DCM.transposed());
+#elif ESTIMATOR == EKF && DISPLAY_ON
+    tp_display.drawCube(tp_estimator.tp_ekf.q.tofloat());
+    tp_display.draw_acc_mag_in_ball(tp_estimator.tp_ekf.a_m.tofloat(), tp_estimator.tp_ekf.m_m.tofloat());
+    tp_display.draw_acc_mag_in_ball2(tp_estimator.tp_ekf.a_p.tofloat(), tp_estimator.tp_ekf.m_p.tofloat());
 
-    tp_display.printVector(tp_ekf.mpu.UnitAccelBody, 10, 90, ILI9341_BLUE);
+    tp_display.printVector(tp_estimator.mpu.UnitAccelBody, 10, 90, ILI9341_BLUE);
 
-    tp_display.printVector(tp_ekf.mag.UnitMagVect, 10, 150, ILI9341_MAGENTA);
+    tp_display.printVector(tp_estimator.mag.UnitMagVect, 10, 150, ILI9341_MAGENTA);
 
-#elif DISPLAY_MODE == MEKF_DISPLAY
-    tp_display.drawCube(tp_mekf.get_q());
-    tp_mekf.mag.read_mag();
-    tp_display.draw_acc_mag_in_ball(tp_mekf.a_m, tp_mekf.a_p.tofloat());
+#elif (ESTIMATOR == MEKF_acc || ESTIMATOR == MEKF_mag) && DISPLAY_ON
+    tp_display.drawCube(tp_estimator.tp_mekf.get_q());
+    tp_display.draw_acc_mag_in_ball(tp_estimator.tp_mekf.v_m, tp_estimator.tp_mekf.v_p.tofloat());
     // tp_display.draw_acc_mag_in_ball2(tp_mekf.a_p.tofloat(), tp_mekf.mag.m_ref);
 
     // tp_display.printVector(tp_ekf.v_a, 10, 90, ILI9341_BLUE);
 
     // tp_display.printVector(tp_ekf.v_m, 10, 150, ILI9341_MAGENTA);
     // tp_display.printVector(tp_ekf.mpu.GyroRate, 280, 50);
-#elif DISPLAY_MODE == MEKF2_DISPLAY
-    tp_display.drawCube(tp_mekf2.get_q());
-    tp_display.draw_acc_mag_in_ball(tp_mekf2.a_p.tofloat(), tp_mekf2.m_p.tofloat());
-    tp_display.draw_acc_mag_in_ball2(tp_mekf2.a_m, tp_mekf2.m_m);
+#elif ESTIMATOR == MEKF2 && DISPLAY_ON
+    tp_display.drawCube(tp_estimator.tp_mekf2.get_q());
+    tp_display.draw_acc_mag_in_ball(tp_estimator.tp_mekf2.a_p.tofloat(), tp_estimator.tp_mekf2.m_p.tofloat());
+    tp_display.draw_acc_mag_in_ball2(tp_estimator.tp_mekf2.a_m, tp_estimator.tp_mekf2.m_m);
 
     // tp_display.printVector(tp_ekf.v_a, 10, 90, ILI9341_BLUE);
 
-    tp_display.printVector(tp_mekf2.a_m, 10, 150, ILI9341_MAGENTA);
-    tp_display.printVector(tp_mekf2.m_m, 100, 80);
+    tp_display.printVector(tp_estimator.tp_mekf2.a_m, 10, 150, ILI9341_MAGENTA);
+    tp_display.printVector(tp_estimator.tp_mekf2.m_m, 10, 80);
 #endif
     display_skip_count = 0;
     }
@@ -334,9 +221,12 @@ void loop() {
 
     // Serial.print("T");
     // debugln(micros() - loop_timer);
-#if DISPLAY_MODE != 0
-    tp_display.printTime(micros() - loop_timer);
+#if DISPLAY_ON
+    // tp_display.printTime(micros() - loop_timer);
+    
+    tp_display.printTime(tp_estimator.dt*1000000);
 #endif
 
-    while (micros() - loop_timer < Tus);
+    // while(micros() - loop_timer < 5000);
+
 }

@@ -1,11 +1,6 @@
 #pragma once
 
-#include "vector3.h"
-// #include "matrix4.h"
 #include "quaternion.h"
-#include "TP_Sense\TP_MPU6050.h"
-#include "TP_Sense\TP_Mag5883.h"
-#include "TP_Sense\TP_BMP280.h"
 #include <Arduino.h>
 #include "Wire.h"
 // #include "matrixN.h"
@@ -37,7 +32,6 @@ protected:
     double Ra;
     // use or not the chart update
     boolean chartUpdate = true;
-    const double dt = 0.01;
 
     // Quaternion quat;
 
@@ -45,8 +39,8 @@ public:
     // covariance matrix
     double P[36];
     double K[36];
-    Vector3d a_p;
-    Vector3f a_m, w_m;
+    Vector3d v_p, v_ref;
+    Vector3f v_m, w_m;
     TP_MEKF(){
         q[0] = 1.0;   q[1] = 0.0;   q[2] = 0.0;   q[3] = 0.0;
         // it is necessary to set an angular velocity different from 0.0 to break the symmetry
@@ -74,16 +68,7 @@ public:
         chartUpdate = chartUpdateIn;
     }
 
-    MPU6050 mpu;
-    Mag5883 mag;
-
-    void init_sensors(){
-        mpu.mpu_setup();
-        mag.mag_setup();
-        delay(250); 
-        // Introduce Gyro Only Mode
-    }
-    void init_estimator(){
+    void init_estimator(const Vector3f v_r){
         // R[0] = R[1] = R[2] = sq(mpu.std_dev_accel);
         // R[3] = R[4] = R[5] = sq(mag.std_dev_mag);
         // sigma_gyro = mpu.std_dev_gyro;
@@ -91,10 +76,11 @@ public:
         // q[1] = 0.0;
         // q[2] = 0.0;
         // q[3] = 0.0;
+        v_ref = v_r.todouble();
     }
 
 
-    void predict_covariance(const QuaternionD q_del){
+    void predict_covariance(const QuaternionD q_del, const double dt){
         // P in present (last) q-centered chart += Q
         P[0]  += Qw*dt*dt*dt/3;         P[18] -= Qw*dt*dt/2;
         P[7]  += Qw*dt*dt*dt/3;         P[25] -= Qw*dt*dt/2;
@@ -145,7 +131,7 @@ public:
   //  wm: measured angular velocity (rad/s)
   //  dt: time step from the last update (s)
   // outputs:
-    void estimate_attitude(){
+    void estimate_attitude(Vector3f v, Vector3f gyro, const double dt){
 
         // compute the state prediction
         static QuaternionD q_del, q_p; // used twice for prediction and for update. delta q
@@ -157,7 +143,7 @@ public:
         q_p = q * q_del;
 
         // compute the covariance matrix for the state prediction
-        predict_covariance(q_del);
+        predict_covariance(q_del, dt);
 
         /*
         *  we compute the measurement prediction
@@ -167,17 +153,17 @@ public:
         // a_p = R'(q_pred)*[0 0 1]' = [0 0 1]*R'(q_pred)
         // a_p = q_p.gravity_vector();
         // a_p = mpu.a_ref.todouble();
-        a_p = mag.m_ref.todouble();
-        q_p.inverse().earth_to_body(a_p);
+        v_p = v_ref;
+        q_p.inverse().earth_to_body(v_p);
         
         // H   = [ [a_p]x      0 ]
         //       [     0       I ]
         static double H[36]; 
         static double M[36]; // P*H'
         static double S[36]; // H*P*H' + [noise covariance]
-        H[0] = 0.0;      H[6] = -a_p[2];  H[12] = a_p[1];   H[18] = 0.0;    H[24] = 0.0;    H[30] = 0.0;
-        H[1] = a_p[2];   H[7] = 0.0;      H[13] = -a_p[0];  H[19] = 0.0;    H[25] = 0.0;    H[31] = 0.0;
-        H[2] = -a_p[1];  H[8] = a_p[0];   H[14] = 0.0;      H[20] = 0.0;    H[26] = 0.0;    H[32] = 0.0;
+        H[0] = 0.0;      H[6] = -v_p[2];  H[12] = v_p[1];   H[18] = 0.0;    H[24] = 0.0;    H[30] = 0.0;
+        H[1] = v_p[2];   H[7] = 0.0;      H[13] = -v_p[0];  H[19] = 0.0;    H[25] = 0.0;    H[31] = 0.0;
+        H[2] = -v_p[1];  H[8] = v_p[0];   H[14] = 0.0;      H[20] = 0.0;    H[26] = 0.0;    H[32] = 0.0;
         H[3] = 0.0;      H[9] = 0.0;      H[15] = 0.0;      H[21] = 1.0;    H[27] = 0.0;    H[33] = 0.0;
         H[4] = 0.0;      H[10] = 0.0;     H[16] = 0.0;      H[22] = 0.0;    H[28] = 1.0;    H[34] = 0.0;
         H[5] = 0.0;      H[11] = 0.0;     H[17] = 0.0;      H[23] = 0.0;    H[29] = 0.0;    H[35] = 1.0;
@@ -218,18 +204,14 @@ public:
         /*
         *   Measure
         */
-        mpu.read_accel();
-        mag.read_mag();
-        mpu.read_gyro();
-
         // a_m = mpu.UnitAccelBody;
-        a_m = mag.UnitMagVect;
-        w_m = mpu.GyroRate; // these are float... hmm...
+        v_m = v;
+        w_m = gyro; // these are float... hmm...
 
         /*
         *   Update the state in the chart
         */
-        double dy[] = { a_m[0]-a_p[0] , a_m[1]-a_p[1] , a_m[2]-a_p[2] , w_m[0]-w[0] , w_m[1]-w[1] , w_m[2]-w[2] };
+        double dy[] = { v_m[0]-v_p[0] , v_m[1]-v_p[1] , v_m[2]-v_p[2] , w_m[0]-w[0] , w_m[1]-w[1] , w_m[2]-w[2] };
         // x = 0 + K*(z-z)
         double dx[6];
         for(int i=0; i<6; i++){

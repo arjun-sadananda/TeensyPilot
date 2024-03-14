@@ -1,11 +1,6 @@
 #pragma once
 
-#include "vector3.h"
-// #include "matrix4.h"
 #include "quaternion.h"
-#include "TP_Sense\TP_MPU6050.h"
-#include "TP_Sense\TP_Mag5883.h"
-#include "TP_Sense\TP_BMP280.h"
 #include <Arduino.h>
 #include "Wire.h"
 // #include "matrixN.h"
@@ -31,10 +26,6 @@ class TP_EKF
 private:
 protected:
 public:
-    MPU6050 mpu;
-    Mag5883 mag;
-    
-    const double Ts = 0.01;
     QuaternionD q;
     double P[16];    // state prediction and update state covriance
     
@@ -43,17 +34,11 @@ public:
     double K[24];
     
     Vector3d v_a, v_m; //Expected measurement and Innovation (Measurement Residual)
-    Vector3d a_m, m_m, a_p, m_p;
+    Vector3d a_m, m_m, a_p, m_p, a_ref, m_ref;
 
     TP_EKF(){}
 
-    void init_sensors(){
-        mpu.mpu_setup();
-        mag.mag_setup();
-        delay(250); 
-        // Introduce Gyro Only Mode
-    }
-    void init_estimator(){
+    void init_estimator(const Vector3f a_r, const Vector3f m_r){
         // memset(&P[0][0], 0, sizeof(P));
         // set P to identity
         for(int k=0; k<16; k++) P[k] = 0.0;
@@ -63,9 +48,12 @@ public:
         Ra = 1.0e-3;//sq(mpu.std_dev_accel);
         Rm = 1.0e-3;//sq(mag.std_dev_mag);
         Rw = 1.0e-3;//mpu.std_dev_gyro;
+
+        a_ref = a_r.todouble();
+        m_ref = m_r.todouble();
     }
 
-    void set_predicted_cov_mat_P(Vector3d &omega){
+    void set_predicted_cov_mat_P(Vector3d &omega, double dt){
         //W_t = [-q_v^T; W_t2]
         static double q_w, k_Q, Q[16];
         // k_Q scalar to be multiplied by K*K^T
@@ -76,7 +64,7 @@ public:
         q_w = q.q1;
         q_v.set(q.q2, q.q3, q.q4);
 
-        k_Q = sq(Qw*Ts)/4.0f;
+        k_Q = sq(Qw*dt)/4.0f;
         // W_t_square.skew_from_vector(q_v);
         // W_t_square += q_w*eye3;
 
@@ -90,7 +78,7 @@ public:
         Q[2] = Q[8];                        Q[6] = Q[9];                                    Q[10] = k_Q * (sq(q_w)+sq(q_v.z)+sq(q_v.x));    Q[14] = -k_Q * q_v.y * q_v.z;
         Q[3] = Q[12];                       Q[7] = Q[8];                                    Q[11] = Q[14];                                  Q[15] = k_Q * (sq(q_w)+sq(q_v.x)+sq(q_v.y));
 
-        w = omega*0.5f*Ts;
+        w = omega*0.5f*dt;
         static double F[16];
         F[0] = 1.0;         F[4] = -w.x;        F[8]  = -w.y;       F[12] = -w.z;
         F[1] = w.x;         F[5] =  1.0;        F[9]  =  w.z;       F[13] = -w.y;
@@ -182,7 +170,7 @@ public:
         static double H[24]; 
         static double M[24]; // P*H'
         static double S[36]; // H*P*H' + [noise covariance]
-        const static Vector3d g(mpu.a_ref.x, mpu.a_ref.y, mpu.a_ref.z), r(mag.m_ref.x, mag.m_ref.y, mag.m_ref.z);
+        const static Vector3d g(a_ref.x, a_ref.y, a_ref.z), r(m_ref.x, m_ref.y, m_ref.z);
 
         static double q_w, q_x, q_y, q_z;
         q_w = q.q1; q_x = q.q2; q_y = q.q3; q_z = q.q4;
@@ -282,7 +270,7 @@ public:
         return;
     }
 
-    void attitude_estimate(){
+    void estimate_attitude(Vector3f mag, Vector3f acc, Vector3f gyro, const double dt){
 
         // q_t.rotate(mpu.GyroRate);
         static QuaternionD q_from_gyro_dt;
@@ -291,23 +279,20 @@ public:
         
         // Q_t.process_noise_cov_mat(q_t, mpu.std_dev_gyro, Ts);
         // ------- Predict -------
-        mpu.read_gyro();
         static Vector3d w_m;
-        w_m.set(mpu.GyroRate.x, mpu.GyroRate.y, mpu.GyroRate.z);
-        q_from_gyro_dt.from_angular_velocity(w_m, Ts);
-        set_predicted_cov_mat_P(w_m);    // use last quaternion state for Q=sigma^2*W*W^T -> P = F_omega*P*F_omega^T + Q
+        w_m.set(gyro.x, gyro.y, gyro.z);
+        q_from_gyro_dt.from_angular_velocity(w_m, dt);
+        set_predicted_cov_mat_P(w_m, dt);    // use last quaternion state for Q=sigma^2*W*W^T -> P = F_omega*P*F_omega^T + Q
         q *= q_from_gyro_dt;         //F.from_omega_dt(mpu.GyroRate, Ts); q = F*q;
 
         // ------- Update --------
-        mpu.read_accel();
-        mag.read_mag();
 
-        a_m = mpu.UnitAccelBody.todouble();
-        m_m = mag.UnitMagVect.todouble(); // these are float... hmm...
+        a_m = acc.todouble();
+        m_m = mag.todouble(); // these are float... hmm...
 
-        a_p = mpu.a_ref.todouble();
+        a_p = a_ref;
         q.inverse().earth_to_body(a_p);
-        m_p = mag.m_ref.todouble();
+        m_p = m_ref;
         q.inverse().earth_to_body(m_p);
 
         update();
