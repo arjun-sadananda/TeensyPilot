@@ -55,6 +55,7 @@ public:
 
         // m_ref.set(38290.3, 0, 20923.0); //NED
         // m_ref.normalize();
+        set_m_ref();
     }
     void set_m_ref(){
         Vector3f sum;

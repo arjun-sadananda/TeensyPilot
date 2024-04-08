@@ -128,9 +128,11 @@ public:
 
     void printTime(int t){//-90deg to 90deg
         Display.setFont(Arial_8);
+        Display.fillRect(10, 30, 40, 20, ILI9341_BLACK);
         Display.setCursor(10, 30);
-        Display.fillRect(10, 30, 40, 10, ILI9341_BLACK);
         Display.print(t);
+        Display.setCursor(10, 42);
+        Display.print(int(1000000.0/t));
     }
     void printStatus(String string){//-90deg to 90deg
         Display.setFont(Arial_8);
@@ -149,6 +151,21 @@ public:
         Display.setCursor(x, y+11);
         Display.print(vector.y);
         Display.setCursor(x, y+22);
+        Display.print(vector.z);
+        
+        Display.setTextColor(C_CYAN, ILI9341_BLACK);
+    }
+    
+    void printVector(Vector3l vector, int x, int y, uint16_t color = ILI9341_WHITE){//-90deg to 90deg
+        Display.setFont(Arial_8);
+        
+        Display.setTextColor(color, ILI9341_BLACK);
+        Display.fillRect(x, y, 120, 11, ILI9341_BLACK);
+        Display.setCursor(x, y);
+        Display.print(vector.x);
+        Display.setCursor(x+40, y);
+        Display.print(vector.y);
+        Display.setCursor(x+80, y);
         Display.print(vector.z);
         
         Display.setTextColor(C_CYAN, ILI9341_BLACK);

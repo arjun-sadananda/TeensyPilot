@@ -204,7 +204,7 @@ public:
         /*
         *   Measure
         */
-        // a_m = mpu.UnitAccelBody;
+        // a_m = mpu.UnitAccVect;
         v_m = v;
         w_m = gyro; // these are float... hmm...
 

@@ -20,7 +20,7 @@ public:
     const float std_dev_accel = 3*DEG_TO_RAD;    // 3deg try 1 0.0523599??
     Vector3f GyroRate;
     Vector3f AccelBody;       // Measurements from Accel
-    Vector3f UnitAccelBody;
+    Vector3f UnitAccVect;
     Rotation TO_NED_FRAME = ROTATION_ROLL_180;
     MPU6050(){}
     void mpu_setup() {  //MPU6050 default address is 0x68 MPU:Motion Processing Units
@@ -78,7 +78,7 @@ public:
 
         AccelBody = AccLSB.tofloat()/4096 + AccelOffset;
         AccelBody.rotate(TO_NED_FRAME);
-        UnitAccelBody = AccelBody.normalized();
+        UnitAccVect = AccelBody.normalized();
         // acc_x = (float)AccXLSB / 4096 + AccXOffset;
         // acc_y = (float)AccYLSB / 4096 + AccYOffset;
         // acc_z = (float)AccZLSB / 4096 + AccZOffset;
