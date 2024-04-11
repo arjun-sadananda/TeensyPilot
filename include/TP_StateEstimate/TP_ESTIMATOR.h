@@ -26,7 +26,7 @@
 #define MEKF_mag 4
 #define MEKF2 5
 
-#define ESTIMATOR MEKF2
+#define ESTIMATOR MEKF_acc
 
 #define MPU_QMC 0
 #define LSM9D 1 
@@ -93,9 +93,9 @@ public:
 #elif ESTIMATOR == MEKF_acc
         tp_mekf.init_estimator(a_ref);
 #elif ESTIMATOR == MEKF_mag
-        mpu.calibrate_gyro();
-        mag.set_m_ref();
-        tp_mekf.init_estimator(mag.m_ref);
+        // mpu.calibrate_gyro();
+        // mag.set_m_ref();
+        tp_mekf.init_estimator(m_ref);
 #elif ESTIMATOR == MEKF2
         // mpu.calibrate_gyro();
         // mag.set_m_ref();
@@ -143,7 +143,7 @@ public:
 #elif ESTIMATOR == MEKF_acc
         tp_mekf.estimate_attitude(UnitAccVect, GyroRate, dt);
 #elif ESTIMATOR == MEKF_mag
-        tp_mekf.estimate_attitude(mag.UnitMagVect, mpu.GyroRate, dt);
+        tp_mekf.estimate_attitude(UnitMagVect, GyroRate, dt);
 #elif ESTIMATOR == MEKF2
         tp_mekf2.estimate_attitude(UnitMagVect, UnitAccVect, GyroRate, dt);
 #endif

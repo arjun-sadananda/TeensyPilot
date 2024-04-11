@@ -7,7 +7,7 @@
 #include "matrix3.h"
 
 #define PIN_CS 10
-#define PIN_DC 9
+#define PIN_DC 9   //9, 15
 
 #include <string.h>
 
@@ -140,7 +140,12 @@ public:
         Display.setCursor(10, 220);
         Display.print(string);
     }
-
+    void printStatus(int n){//-90deg to 90deg
+        Display.setFont(Arial_8);
+        Display.fillRect(110, 220, 100, 10, ILI9341_BLACK);
+        Display.setCursor(110, 220);
+        Display.print(n);
+    }
     void printVector(Vector3f vector, int x, int y, uint16_t color = ILI9341_CYAN){//-90deg to 90deg
         Display.setFont(Arial_8);
         
