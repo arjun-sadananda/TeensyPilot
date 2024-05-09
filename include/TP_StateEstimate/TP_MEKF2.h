@@ -3,7 +3,11 @@
 #include <Arduino.h>
 #include "Wire.h"
 // #include "matrixN.h"
-#include "AP_Math.h"
+// #include "AP_Math.h"
+
+#include "SD.h"
+
+
 
 #define GYRO_ONLY true
 
@@ -18,6 +22,7 @@ protected:
     // (rotation that transform vectors from the sensor reference frame, to the external reference frame)
     // double q[4];
     QuaternionD q;
+    QuaternionD q_p;
     // angular velocity (rad/s)
     // double w[3];
     Vector3d w;
@@ -36,10 +41,18 @@ protected:
 
 public:
     // covariance matrix
+    bool use_triad = false;
     double P[36];
     double K[54];
     Vector3d a_p, m_p;
     Vector3f a_m, m_m, w_m, a_ref, m_ref;
+    double dy[9];
+    double get_a_res_norm(){
+        return sq(dy[0]) + sq(dy[1]) + sq(dy[2]);
+    }
+    double get_m_res_norm(){
+        return sq(dy[3]) + sq(dy[4]) + sq(dy[5]);
+    }
     TP_MEKF2(){
         q[0] = 1.0;   q[1] = 0.0;   q[2] = 0.0;   q[3] = 0.0;
         // it is necessary to set an angular velocity different from 0.0 to break the symmetry
@@ -55,7 +68,7 @@ public:
         Qm = 0.0;
         Rw = 1.0e-3; // Gyro Measure Noise
         Ra = 1.0e-3;
-        Rm = 10.0e-3;
+        Rm = 1.0e-3; // 10.0e-3 vs 1.0e-3
     }
 
     Quaternion get_q(){
@@ -64,14 +77,28 @@ public:
         for(int i=0; i<4; i++) ret[i] = (float) q[i];
         return ret;
     }
+    Quaternion get_qp(){
+        static Quaternion ret;
+        // ret[0] = (float) q[3];
+        for(int i=0; i<4; i++) ret[i] = (float) q_p[i];
+        return ret;
+    }
+    Vector3f get_omega(){
+        static Vector3f ret;
+        // ret[0] = (float) q[3];
+        ret[0] = (float) w[0];
+        ret[1] = (float) w[1];
+        ret[2] = (float) w[2];
+        return ret;
+    }
     
     void set_chartUpdate( boolean chartUpdateIn ){
         chartUpdate = chartUpdateIn;
     }
     
-    void init_estimator(const Vector3f a_r, const Vector3f m_r){
+    void init_estimator(const Vector3f a_r, const Vector3f m_r, bool triad_on, double R_m = 1.0e-3){
         // Introduce Gyro Only Mode
-
+        use_triad = triad_on;
         // R[0] = R[1] = R[2] = sq(mpu.std_dev_accel);
         // R[3] = R[4] = R[5] = sq(mag.std_dev_mag);
         // sigma_gyro = mpu.std_dev_gyro;
@@ -80,7 +107,12 @@ public:
         // q[2] = 0.0;
         // q[3] = 0.0;
         a_ref = a_r;
-        m_ref = (a_r%m_r).normalized()%a_r;
+        if (use_triad)
+            m_ref = (a_r%m_r).normalized()%a_r;
+        else
+            m_ref = m_r;
+            
+        Rm = R_m; // 10.0e-3 vs 1.0e-3
     }
 
 
@@ -138,7 +170,7 @@ public:
     void estimate_attitude(Vector3f mag, Vector3f acc, Vector3f gyro, const double dt){
 
         // compute the state prediction
-        static QuaternionD q_del, q_p; // used twice for prediction and for update. delta q
+        static QuaternionD q_del; // used twice for prediction and for update. delta q
         if( !w.is_zero() )
             q_del.from_angular_velocity(w,dt);
         else
@@ -226,12 +258,22 @@ public:
         a_m = acc;
         w_m = gyro; // these are float... hmm...
 
-        m_m = (a_m%m_m).normalized()%a_m;
+        // TRIAD idea based preprocessing
+        if (use_triad)
+            m_m = (a_m%m_m).normalized()%a_m;
 
         /*
         *   Update the state in the chart
         */
-        double dy[] = { m_m[0]-m_p[0], m_m[1]-m_p[1], m_m[2]-m_p[2], a_m[0]-a_p[0] , a_m[1]-a_p[1] , a_m[2]-a_p[2] , w_m[0]-w[0] , w_m[1]-w[1] , w_m[2]-w[2] };
+        dy[0] = m_m[0]-m_p[0];
+        dy[1] = m_m[1]-m_p[1]; 
+        dy[2] = m_m[2]-m_p[2]; 
+        dy[3] = a_m[0]-a_p[0]; 
+        dy[4] = a_m[1]-a_p[1]; 
+        dy[5] = a_m[2]-a_p[2]; 
+        dy[6] = w_m[0]-w[0]; 
+        dy[7] = w_m[1]-w[1];
+        dy[8] = w_m[2]-w[2];
         // x = 0 + K*(z-z)
         double dx[6];
         for(int i=0; i<6; i++){

@@ -23,7 +23,7 @@ class TP_Display{
 
 private:
 
-    const Rotation NED_TO_DISPLAY = ROTATION_YAW_270;
+    const Rotation NED_TO_DISPLAY = ROTATION_YAW_90;   //ROTATION_YAW_90 <- for 1 ; ROTATION_YAW_270 -> for 3 <-set Rotation
 
     uint16_t C_DKBLUE = 0;
     uint16_t C_CYAN = 0;
@@ -53,7 +53,7 @@ public:
         C_CYAN = Display.color565(0, 255, 255);
 
         Display.begin();
-        Display.setRotation(3);
+        Display.setRotation(1);
         Display.fillScreen(ILI9341_BLACK);
 
         Display.setFont(Arial_10);
@@ -140,10 +140,10 @@ public:
         Display.setCursor(10, 220);
         Display.print(string);
     }
-    void printStatus(int n){//-90deg to 90deg
+    void printStatus(int n, int x = 110, int y=220){//-90deg to 90deg
         Display.setFont(Arial_8);
-        Display.fillRect(110, 220, 100, 10, ILI9341_BLACK);
-        Display.setCursor(110, 220);
+        Display.fillRect(x, y, 100, 10, ILI9341_BLACK);
+        Display.setCursor(x, y);
         Display.print(n);
     }
     void printVector(Vector3f vector, int x, int y, uint16_t color = ILI9341_CYAN){//-90deg to 90deg
@@ -176,6 +176,22 @@ public:
         Display.setTextColor(C_CYAN, ILI9341_BLACK);
     }
     
+    void printVel(int *vel, int x, int y, uint16_t color = ILI9341_WHITE){//-90deg to 90deg
+        Display.setFont(Arial_8);
+        
+        Display.setTextColor(color, ILI9341_BLACK);
+        Display.fillRect(x, y, 70, 30, ILI9341_BLACK);
+        Display.setCursor(x, y+20);
+        Display.print(vel[0]);
+        Display.setCursor(x, y);
+        Display.print(vel[1]);
+        Display.setCursor(x+40, y+20);
+        Display.print(vel[2]);
+        Display.setCursor(x+40, y);
+        Display.print(vel[3]);
+        
+        Display.setTextColor(C_CYAN, ILI9341_BLACK);
+    }
 
 
 
@@ -270,7 +286,7 @@ public:
     void drawCube(Matrix3f DCM){//-90deg to 90deg
         static Vector3f center;
         
-        static Rotation NED_TO_DISPLAY = ROTATION_YAW_270;
+        // static Rotation NED_TO_DISPLAY = ROTATION_YAW_270;
 
         // erase
         for (int i =0; i<3; i++){

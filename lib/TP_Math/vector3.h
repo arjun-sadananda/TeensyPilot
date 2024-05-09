@@ -45,24 +45,25 @@
 *           or if the matrix (A) * b = 0
 *
 ****************************************/
+
+/*
+ *
+ * Math Classes used in ArduPilot stripped down to the bare minimum needed for TeensyPilot.
+ * - by Arjun Sadananda - 05/2024
+ * Quaternion, Matrix3, Vector3, Vector2
+ * 
+ */
+
+
 #pragma once
+#pragma GCC optimize("O2")
 
-#ifndef MATH_CHECK_INDEXES
-#define MATH_CHECK_INDEXES 0
-#endif
-
-#include <cmath>
-#include <float.h>
-#include <string.h>
-#if MATH_CHECK_INDEXES
-#include <assert.h>
-#endif
+#include <float.h>      // FLT_EPSILON
 
 #include "rotations.h"
+#include "vector2.h"
+#include "matrix3.h"
 
-#include "ftype.h"
-
-#include <stdint.h>
 
 template <typename T>
 class Matrix3;
@@ -100,38 +101,60 @@ public:
         y = y1;
         z = z1;
     }
-    // test for equality
-    bool operator ==(const Vector3<T> &v) const;
+    // // test for equality
+    // bool operator ==(const Vector3<T> &v) const;
 
-    // test for inequality
-    bool operator !=(const Vector3<T> &v) const;
+    // // test for inequality
+    // bool operator !=(const Vector3<T> &v) const;
 
     // negation
-    Vector3<T> operator -() const;
+    Vector3<T> operator -() const{
+        return Vector3<T>(-x,-y,-z);
+    }
 
     // addition
-    Vector3<T> operator +(const Vector3<T> &v) const;
+    Vector3<T> operator +(const Vector3<T> &v) const{
+        return Vector3<T>(x+v.x, y+v.y, z+v.z);
+    }
 
     // subtraction
-    Vector3<T> operator -(const Vector3<T> &v) const;
+    Vector3<T> operator -(const Vector3<T> &v) const{
+        return Vector3<T>(x-v.x, y-v.y, z-v.z);
+    }
 
     // uniform scaling
-    Vector3<T> operator *(const T num) const;
+    Vector3<T> operator *(const T num) const{
+        return Vector3<T>(x*num, y*num, z*num);
+    }
 
     // uniform scaling
-    Vector3<T> operator  /(const T num) const;
+    Vector3<T> operator  /(const T num) const{
+        return Vector3<T>(x/num, y/num, z/num);
+    }
 
     // addition
-    Vector3<T> &operator +=(const Vector3<T> &v);
+    Vector3<T> &operator +=(const Vector3<T> &v){
+        x+=v.x; y+=v.y; z+=v.z;
+        return *this;
+    }
 
     // subtraction
-    Vector3<T> &operator -=(const Vector3<T> &v);
+    Vector3<T> &operator -=(const Vector3<T> &v){
+        x -= v.x; y -= v.y; z -= v.z;
+        return *this;
+    }
 
     // uniform scaling
-    Vector3<T> &operator *=(const T num);
+    Vector3<T> &operator *=(const T num){
+        x*=num; y*=num; z*=num;
+        return *this;
+    }
 
     // uniform scaling
-    Vector3<T> &operator /=(const T num);
+    Vector3<T> &operator /=(const T num){
+        x /= num; y /= num; z /= num;
+        return *this;
+    }
 
     // non-uniform scaling
     Vector3<T> &operator *=(const Vector3<T> &v) {
@@ -157,7 +180,9 @@ public:
     }
 
     // dot product
-    T operator *(const Vector3<T> &v) const;
+    T operator *(const Vector3<T> &v) const {
+        return x*v.x + y*v.y + z*v.z;
+    }
 
     // dot product for Lua
     T dot(const Vector3<T> &v) const {
@@ -165,53 +190,296 @@ public:
     }
     
     // multiply a row vector by a matrix, to give a row vector
-    Vector3<T> row_times_mat(const Matrix3<T> &m) const;
-
-    // multiply a column vector by a row vector, returning a 3x3 matrix
-    Matrix3<T> mul_rowcol(const Vector3<T> &v) const;
+    Vector3<T> row_times_mat(const Matrix3<T> &m) const{
+        return Vector3<T>(*this * m.colx(),
+                        *this * m.coly(),
+                        *this * m.colz());
+    }
 
     // cross product
-    Vector3<T> operator %(const Vector3<T> &v) const;
+    Vector3<T> operator %(const Vector3<T> &v) const {
+        Vector3<T> temp(y*v.z - z*v.y, z*v.x - x*v.z, x*v.y - y*v.x);
+        return temp;
+    }
 
     // cross product for Lua
     Vector3<T> cross(const Vector3<T> &v) const {
         return *this % v;
     }
 
-    // scale a vector3
-    Vector3<T> scale(const T v) const {
-        return *this * v;
-    }
-    
-    // computes the angle between this vector and another vector
-    T angle(const Vector3<T> &v2) const;
-
-    // check if any elements are NAN
-    bool is_nan(void) const;// WARN_IF_UNUSED;
-
-    // check if any elements are infinity
-    bool is_inf(void) const;// WARN_IF_UNUSED;
-
     // check if all elements are zero
     bool is_zero(void) const{//} WARN_IF_UNUSED {
         return x == 0 && y == 0 && z == 0;
     }
 
+    // scale a vector3
+    Vector3<T> scale(const T v) const {
+        return *this * v;
+    }
 
     // rotate by a standard rotation
-    void rotate(enum Rotation rotation);
-    void rotate_inverse(enum Rotation rotation);
-
-    // rotate vector by angle in radians in xy plane leaving z untouched
-    void rotate_xy(T rotation_rad);
-
-    // return xy components of a vector3 as a vector2.
-    // this returns a reference to the original vector3 xy data
-    const Vector2<T> &xy() const {
-        return *(const Vector2<T> *)this;
+    void rotate(enum Rotation rotation){
+        T tmp;
+        switch (rotation) {
+        case ROTATION_NONE:
+            return;
+        case ROTATION_YAW_45: {
+            tmp = HALF_SQRT_2*(T)(x - y);
+            y   = HALF_SQRT_2*(T)(x + y);
+            x = tmp;
+            return;
+        }
+        case ROTATION_YAW_90: {
+            tmp = x; x = -y; y = tmp;
+            return;
+        }
+        case ROTATION_YAW_135: {
+            tmp = -HALF_SQRT_2*(T)(x + y);
+            y   =  HALF_SQRT_2*(T)(x - y);
+            x = tmp;
+            return;
+        }
+        case ROTATION_YAW_180:
+            x = -x; y = -y;
+            return;
+        case ROTATION_YAW_225: {
+            tmp = HALF_SQRT_2*(T)(y - x);
+            y   = -HALF_SQRT_2*(T)(x + y);
+            x = tmp;
+            return;
+        }
+        case ROTATION_YAW_270: {
+            tmp = x; x = y; y = -tmp;
+            return;
+        }
+        case ROTATION_YAW_315: {
+            tmp = HALF_SQRT_2*(T)(x + y);
+            y   = HALF_SQRT_2*(T)(y - x);
+            x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_180: {
+            y = -y; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_180_YAW_45: {
+            tmp = HALF_SQRT_2*(T)(x + y);
+            y   = HALF_SQRT_2*(T)(x - y);
+            x = tmp; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_180_YAW_90:
+        case ROTATION_PITCH_180_YAW_270: {
+            tmp = x; x = y; y = tmp; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_180_YAW_135: {
+            tmp = HALF_SQRT_2*(T)(y - x);
+            y   = HALF_SQRT_2*(T)(y + x);
+            x = tmp; z = -z;
+            return;
+        }
+        case ROTATION_PITCH_180: {
+            x = -x; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_180_YAW_225: {
+            tmp = -HALF_SQRT_2*(T)(x + y);
+            y   =  HALF_SQRT_2*(T)(y - x);
+            x = tmp; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_180_YAW_270: 
+        case ROTATION_PITCH_180_YAW_90: {
+            tmp = x; x = -y; y = -tmp; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_180_YAW_315: {
+            tmp =  HALF_SQRT_2*(T)(x - y);
+            y   = -HALF_SQRT_2*(T)(x + y);
+            x = tmp; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_90: {
+            tmp = z; z = y; y = -tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_YAW_45: {
+            tmp = z; z = y; y = -tmp;
+            tmp = HALF_SQRT_2*(T)(x - y);
+            y   = HALF_SQRT_2*(T)(x + y);
+            x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_YAW_90: {
+            tmp = z; z = y; y = -tmp;
+            tmp = x; x = -y; y = tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_YAW_135: {
+            tmp = z; z = y; y = -tmp;
+            tmp = -HALF_SQRT_2*(T)(x + y);
+            y   =  HALF_SQRT_2*(T)(x - y);
+            x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_270: {
+            tmp = z; z = -y; y = tmp;
+            return;
+        }
+        case ROTATION_ROLL_270_YAW_45: {
+            tmp = z; z = -y; y = tmp;
+            tmp = HALF_SQRT_2*(T)(x - y);
+            y   = HALF_SQRT_2*(T)(x + y);
+            x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_270_YAW_90: {
+            tmp = z; z = -y; y = tmp;
+            tmp = x; x = -y; y = tmp;
+            return;
+        }
+        case ROTATION_ROLL_270_YAW_135: {
+            tmp = z; z = -y; y = tmp;
+            tmp = -HALF_SQRT_2*(T)(x + y);
+            y   =  HALF_SQRT_2*(T)(x - y);
+            x = tmp;
+            return;
+        }
+        case ROTATION_PITCH_90: {
+            tmp = z; z = -x; x = tmp;
+            return;
+        }
+        case ROTATION_PITCH_270: {
+            tmp = z; z = x; x = -tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_PITCH_90: {
+            tmp = z; z = y; y = -tmp;
+            tmp = z; z = -x; x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_180_PITCH_90: {
+            y = -y; z = -z;
+            tmp = z; z = -x; x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_270_PITCH_90: {
+            tmp = z; z = -y; y = tmp;
+            tmp = z; z = -x; x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_PITCH_180: {
+            tmp = z; z = y; y = -tmp;
+            x = -x; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_270_PITCH_180: {
+            tmp = z; z = -y; y = tmp;
+            x = -x; z = -z;
+            return;
+        }
+        case ROTATION_ROLL_90_PITCH_270: {
+            tmp = z; z = y; y = -tmp;
+            tmp = z; z = x; x = -tmp;
+            return;
+        }
+        case ROTATION_ROLL_180_PITCH_270: {
+            y = -y; z = -z;
+            tmp = z; z = x; x = -tmp;
+            return;
+        }
+        case ROTATION_ROLL_270_PITCH_270: {
+            tmp = z; z = -y; y = tmp;
+            tmp = z; z = x; x = -tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_PITCH_180_YAW_90: {
+            tmp = z; z = y; y = -tmp;
+            x = -x; z = -z;
+            tmp = x; x = -y; y = tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_YAW_270: {
+            tmp = z; z = y; y = -tmp;
+            tmp = x; x = y; y = -tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_PITCH_68_YAW_293: {
+            T tmpx = x;
+            T tmpy = y;
+            T tmpz = z;
+            x =  0.14303897231223747232853327204793 * tmpx +  0.36877648650320382639478111741482 * tmpy + -0.91844638134308709265241077446262 * tmpz;
+            y = -0.33213277779664740485543461545603 * tmpx + -0.85628942146641884303193137384369 * tmpy + -0.39554550256296522325882847326284 * tmpz;
+            z = -0.93232380121551217122544130688766 * tmpx +  0.36162457008209242248497616856184 * tmpy +  0.00000000000000002214311861220361 * tmpz;
+            return;
+        }
+        case ROTATION_PITCH_315: {
+            tmp = HALF_SQRT_2*(T)(x - z);
+            z   = HALF_SQRT_2*(T)(x + z);
+            x = tmp;
+            return;
+        }
+        case ROTATION_ROLL_90_PITCH_315: {
+            tmp = z; z = y; y = -tmp;
+            tmp = HALF_SQRT_2*(T)(x - z);
+            z   = HALF_SQRT_2*(T)(x + z);
+            x = tmp;
+            return;
+        }
+        case ROTATION_PITCH_7: {
+            const T sin_pitch = 0.1218693434051474899781908334262; // sinF(pitch);
+            const T cos_pitch = 0.99254615164132198312785249072476; // cosF(pitch);
+            T tmpx = x;
+            T tmpz = z;
+            x =  cos_pitch * tmpx + sin_pitch * tmpz;
+            z = -sin_pitch * tmpx + cos_pitch * tmpz;
+            return;
+        }
+        case ROTATION_ROLL_45: {
+            tmp = HALF_SQRT_2*(T)(y - z);
+            z   = HALF_SQRT_2*(T)(y + z);
+            y = tmp;
+            return;
+        }
+        case ROTATION_ROLL_315: {
+            tmp = HALF_SQRT_2*(T)(y + z);
+            z   = HALF_SQRT_2*(T)(z - y);
+            y = tmp;
+            return;
+        }
+        case ROTATION_CUSTOM_1:
+        case ROTATION_CUSTOM_2:
+    // #if !APM_BUILD_TYPE(APM_BUILD_AP_Periph)
+    //         // Do not support custom rotations on Periph
+    //         AP::custom_rotations().rotate(rotation, *this);
+    //         return;
+    // #endif
+        case ROTATION_MAX:
+        case ROTATION_CUSTOM_OLD:
+        case ROTATION_CUSTOM_END:
+            break;
+        }
+        // rotation invalid
+        // INTERNAL_ERROR(AP_InternalError::error_t::bad_rotation);
     }
-    Vector2<T> &xy() {
-        return *(Vector2<T> *)this;
+
+    void rotate_inverse(enum Rotation rotation){
+        Vector3<T> x_vec(1.0f,0.0f,0.0f);
+        Vector3<T> y_vec(0.0f,1.0f,0.0f);
+        Vector3<T> z_vec(0.0f,0.0f,1.0f);
+
+        x_vec.rotate(rotation);
+        y_vec.rotate(rotation);
+        z_vec.rotate(rotation);
+
+        Matrix3<T> M(
+            x_vec.x, y_vec.x, z_vec.x,
+            x_vec.y, y_vec.y, z_vec.y,
+            x_vec.z, y_vec.z, z_vec.z
+        );
+
+        (*this) = M.mul_transpose(*this);
     }
 
     // gets the length of this vector squared
@@ -221,10 +489,9 @@ public:
     }
 
     // gets the length of this vector
-    T length(void) const;
-
-    // limit xy component vector to a given length. returns true if vector was limited
-    bool limit_length_xy(T max_length);
+    T length(void) const {
+        return sqrt(x*x+y*y+z*z);
+    }
 
     // normalizes this vector
     void normalize()
@@ -243,41 +510,6 @@ public:
     {
         return *this/length();
     }
-
-    // reflects this vector about n
-    void  reflect(const Vector3<T> &n)
-    {
-        Vector3<T>        orig(*this);
-        project(n);
-        *this = *this*2 - orig;
-    }
-
-    // projects this vector onto v
-    void project(const Vector3<T> &v)
-    {
-        *this= v * (*this * v)/(v*v);
-    }
-
-    // returns this vector projected onto v
-    Vector3<T> projected(const Vector3<T> &v) const
-    {
-        return v * (*this * v)/(v*v);
-    }
-
-    // distance from the tip of this vector to another vector squared (so as to avoid the sqrt calculation)
-    T distance_squared(const Vector3<T> &v) const {
-        const T dist_x = x-v.x;
-        const T dist_y = y-v.y;
-        const T dist_z = z-v.z;
-        return (dist_x*dist_x + dist_y*dist_y + dist_z*dist_z);
-    }
-
-    // distance from the tip of this vector to a line segment specified by two vectors
-    T distance_to_segment(const Vector3<T> &seg_start, const Vector3<T> &seg_end) const;
-
-    // extrapolate position given bearing and pitch (in degrees) and distance
-    void offset_bearing(T bearing, T pitch, T distance);
-
     /*
       conversion to/from double
      */
@@ -287,130 +519,7 @@ public:
     Vector3<double> todouble() const {
         return Vector3<double>{x,y,z};
     }
-
-    // convert from right-front-up to front-right-down
-    // or ENU to NED
-    Vector3<T> rfu_to_frd() const {
-        return Vector3<T>{y,x,-z};
-    }
-
-    // given a position p1 and a velocity v1 produce a vector
-    // perpendicular to v1 maximising distance from p1.  If p1 is the
-    // zero vector the return from the function will always be the
-    // zero vector - that should be checked for.
-    static Vector3<T> perpendicular(const Vector3<T> &p1, const Vector3<T> &v1)
-    {
-        const T d = p1 * v1;
-        if (::is_zero(d)) {
-            return p1;
-        }
-        const Vector3<T> parallel = (v1 * d) / v1.length_squared();
-        Vector3<T> perpendicular = p1 - parallel;
-
-        return perpendicular;
-    }
-
-    // Shortest distance between point(p) to a point contained in the line segment defined by w1,w2
-    static T closest_distance_between_line_and_point(const Vector3<T> &w1, const Vector3<T> &w2, const Vector3<T> &p);
-
-    // Point in the line segment defined by w1,w2 which is closest to point(p)
-    static Vector3<T> point_on_line_closest_to_other_point(const Vector3<T> &w1, const Vector3<T> &w2, const Vector3<T> &p);
-
-    // This implementation is borrowed from: http://geomalgorithms.com/a07-_distance.html
-    // INPUT: 4 points corresponding to start and end of two line segments
-
-    // OUTPUT: closest point on segment 2, from segment 1, gets passed on reference as "closest_point"
-    static void segment_to_segment_closest_point(const Vector3<T>& seg1_start, const Vector3<T>& seg1_end, const Vector3<T>& seg2_start, const Vector3<T>& seg2_end, Vector3<T>& closest_point);
-
-    // Returns true if the passed 3D segment passes through a plane defined by plane normal, and a point on the plane
-    static bool segment_plane_intersect(const Vector3<T>& seg_start, const Vector3<T>& seg_end, const Vector3<T>& plane_normal, const Vector3<T>& plane_point);
 };
-
-// check if all elements are zero
-template<> inline bool Vector3<float>::is_zero(void) const {
-    return ::is_zero(x) && ::is_zero(y) && ::is_zero(z);
-}
-
-template<> inline bool Vector3<double>::is_zero(void) const {
-    return ::is_zero(x) && ::is_zero(y) && ::is_zero(z);
-}
-
-// The creation of temporary vector objects as return types creates a significant overhead in certain hot 
-// code paths. This allows callers to select the inline versions where profiling shows a significant benefit
-#if defined(AP_INLINE_VECTOR_OPS) && !defined(HAL_DEBUG_BUILD)
-
-// vector cross product
-template <typename T>
-inline Vector3<T> Vector3<T>::operator %(const Vector3<T> &v) const
-{
-    return Vector3<T>(y*v.z - z*v.y, z*v.x - x*v.z, x*v.y - y*v.x);
-}
-
-// dot product
-template <typename T>
-inline T Vector3<T>::operator *(const Vector3<T> &v) const
-{
-    return x*v.x + y*v.y + z*v.z;
-}
-
-template <typename T>
-inline Vector3<T> &Vector3<T>::operator *=(const T num)
-{
-    x*=num; y*=num; z*=num;
-    return *this;
-}
-
-template <typename T>
-inline Vector3<T> &Vector3<T>::operator /=(const T num)
-{
-    x /= num; y /= num; z /= num;
-    return *this;
-}
-
-template <typename T>
-inline Vector3<T> &Vector3<T>::operator -=(const Vector3<T> &v)
-{
-    x -= v.x; y -= v.y; z -= v.z;
-    return *this;
-}
-
-template <typename T>
-inline Vector3<T> &Vector3<T>::operator +=(const Vector3<T> &v)
-{
-    x+=v.x; y+=v.y; z+=v.z;
-    return *this;
-}
-
-template <typename T>
-inline Vector3<T> Vector3<T>::operator /(const T num) const
-{
-    return Vector3<T>(x/num, y/num, z/num);
-}
-
-template <typename T>
-inline Vector3<T> Vector3<T>::operator *(const T num) const
-{
-    return Vector3<T>(x*num, y*num, z*num);
-}
-
-template <typename T>
-inline Vector3<T> Vector3<T>::operator -(const Vector3<T> &v) const
-{
-    return Vector3<T>(x-v.x, y-v.y, z-v.z);
-}
-
-template <typename T>
-inline Vector3<T> Vector3<T>::operator +(const Vector3<T> &v) const
-{
-    return Vector3<T>(x+v.x, y+v.y, z+v.z);
-}
-
-template <typename T>
-inline Vector3<T> Vector3<T>::operator -(void) const
-{
-    return Vector3<T>(-x,-y,-z);
-}
-#endif
 
 typedef Vector3<int16_t>                Vector3i;
 typedef Vector3<uint16_t>               Vector3ui;
@@ -418,3 +527,11 @@ typedef Vector3<int32_t>                Vector3l;
 typedef Vector3<uint32_t>               Vector3ul;
 typedef Vector3<float>                  Vector3f;
 typedef Vector3<double>                 Vector3d;
+
+
+template class Vector3<float>;
+template class Vector3<double>;
+
+
+// template Vector3<int32_t> &Vector3<int32_t>::operator +=(const Vector3<int32_t> &v);
+// template bool Vector3<int16_t>::operator ==(const Vector3<int16_t> &v) const;

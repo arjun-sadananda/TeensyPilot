@@ -35,9 +35,18 @@
 // Matrix3ul	3x3 matrix of unsigned longs
 // Matrix3f		3x3 matrix of signed floats
 //
+
+/*
+ *
+ * Math Classes used in ArduPilot stripped down to the bare minimum needed for TeensyPilot.
+ * - by Arjun Sadananda - 05/2024
+ * Quaternion, Matrix3, Vector3, Vector2
+ * 
+ */
+
 #pragma once
 
-#include "ftype.h"
+#include <cmath>
 
 #include "vector3.h"
 #include "vector2.h"
@@ -78,16 +87,16 @@ public:
     }
 
     // test for equality
-    bool operator        == (const Matrix3<T> &m)
-    {
-        return (a==m.a && b==m.b && c==m.c);
-    }
+    // bool operator        == (const Matrix3<T> &m)
+    // {
+    //     return (a==m.a && b==m.b && c==m.c);
+    // }
 
     // test for inequality
-    bool operator        != (const Matrix3<T> &m)
-    {
-        return (a!=m.a || b!=m.b || c!=m.c);
-    }
+    // bool operator        != (const Matrix3<T> &m)
+    // {
+    //     return (a!=m.a || b!=m.b || c!=m.c);
+    // }
 
     // negation
     Matrix3<T> operator        - (void) const
@@ -227,12 +236,6 @@ public:
         a.y = a.z = 0;
         b.x = b.z = 0;
         c.x = c.y = 0;
-    }
-
-    // check if any elements are NAN
-    bool        is_nan(void)// WARN_IF_UNUSED
-    {
-        return a.is_nan() || b.is_nan() || c.is_nan();
     }
 
     // create a rotation matrix from Euler angles

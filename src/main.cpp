@@ -1,25 +1,28 @@
 // #include <zephyr.h>
 #include <Arduino.h>
 
-#include "AP_Math.h"
-// #include "TP_Display\TP_Display.h"
+#include "TP_Display\TP_Display.h"
 #include "TP_StateEstimate\TP_ESTIMATOR.h"
-#include "Wire.h"
-
-// #include "teensyshot/ESCCMD.h"
-// #include "teensyshot/DSHOT.h"
-
-#include <Servo.h>
-
+#include "TP_Control\TP_Control.h"
+#include "SD.h"
 // #define DEBUG_MODE true
 // #define DEBUG_AHRS true
 // #define DEBUG_ALT_EST true
 
-#define DISPLAY_ON false
-// const int display_type = MEKF2_DISPLAY; 
-#define SERIAL_ON false
+// #define MOTORS_ON false
 
+#define DISPLAY_ON true
+const int display_type = MEKF2_DISPLAY; 
+
+
+#define SERIAL_ON false //SERIAL_DEBUG
 #define MAG_FOR_CALIB false
+#define SERIAL_MONITOR true
+#define SERIAL_FOR_AHRSs false
+
+// #define SERIAL_MODE SERIAL_MONITOR
+
+#define SD_LOG_ON false
 
 #if SERIAL_ON
     #define debug(x) Serial.print(x); Serial.print(" ");
@@ -29,231 +32,170 @@
     #define debugln(x)
 #endif
 
-uint32_t start_time;
+uint32_t start_time, control_start_time;
 uint32_t read_time, estimate_time, display_time;
+
 TP_ESTIMATOR tp_estimator;
 
-int16_t speed = 0;
-// TP_Display tp_display;
+#if DISPLAY_ON
+    TP_Display tp_display;
+#endif
+
+#if SD_LOG_ON
+    File myFile;
+#endif
 
 /*
-main
+    ******************************************* setup *******************************************
 */
-// FlexPWM4.0	22
-// FlexPWM4.1	23	4.482 kHz
-// FlexPWM4.2	2, 3
-#define ESCPIN1 2
-#define ESCPIN2 3
-#define ESCPIN3 4
-#define ESCPIN4 5
-
-#define ESC_CALIB false
-Servo ESC1, ESC2, ESC3, ESC4;
 
 void setup() {
     pinMode(13, OUTPUT);
-    ESC1.attach(ESCPIN1, 1000, 2000);
-    ESC2.attach(ESCPIN2, 1000, 2000);
-    ESC3.attach(ESCPIN3, 1000, 2000);
-    ESC4.attach(ESCPIN4, 1000, 2000);
+    pinMode(8, INPUT_PULLUP);
 
-    ESC1.writeMicroseconds(1000);
-    ESC2.writeMicroseconds(1000);
-    ESC3.writeMicroseconds(1000);
-    ESC4.writeMicroseconds(1000); // 3 beeps - powering on
-    delay(3000);
-
-    ESC1.writeMicroseconds(1200);
-    ESC2.writeMicroseconds(1200);
-    ESC3.writeMicroseconds(1200);
-    ESC4.writeMicroseconds(1200);   // 1 long low beep - arming sequence begins
-    delay(1500);
-#if ESC_CALIB
-    // Calibration 
-    // ESC1.writeMicroseconds(1110);
-    // ESC1.writeMicroseconds(2230);
-    ESC1.writeMicroseconds(2000);
-    ESC2.writeMicroseconds(2000);
-    ESC3.writeMicroseconds(2000);
-    ESC4.writeMicroseconds(2000);   // single highs beeps - measure
-    delay(7000);                   // rising beeps - calibration done
-
-    ESC1.writeMicroseconds(1000);
-    ESC2.writeMicroseconds(1000);
-    ESC3.writeMicroseconds(1000);
-    ESC4.writeMicroseconds(1000);   // double low beeps - measure
-    delay(7000);                   // falling beeps - calibration done
-    // Calibration Ended
-#endif
-    ESC1.writeMicroseconds(1000);
-    ESC2.writeMicroseconds(1000);
-    ESC3.writeMicroseconds(1000);
-    ESC4.writeMicroseconds(1000);   // 1 long high beep (if not callibrating) - arming sequence ends
-    delay(5000);
-    for(int i = 0; i<300; i+=1){
-        ESC1.writeMicroseconds(1000+i);
-        ESC2.writeMicroseconds(1000+i);
-        ESC3.writeMicroseconds(1000+i);
-        ESC4.writeMicroseconds(1000+i);
-        delay(10);
-        // For searching for max min if calibrated unkown value by mistake (uing analogWrite() etc.!!
-        // Serial.println(i);
-        // digitalWrite(13,HIGH);
-        // delay(100);
-        // digitalWrite(13,LOW);
-        // delay(1000);
-    }
-    ESC1.writeMicroseconds(1000);
-    ESC2.writeMicroseconds(1000);
-    ESC3.writeMicroseconds(1000);
-    ESC4.writeMicroseconds(1000);
-
-    // DSHOT_init(count);
-    // ret = DSHOT_arm();
-    // ret = ESCCMD_beep(); 
-
-    // TCCR1
-    // ESC.attach(4,1000,2000);
-    // ESC.writeMicroseconds(0);
-    // delay(1000);
-    // ESC.writeMicroseconds(45);
-    // delay(1);
-    // ESC.writeMicroseconds(0);
-    // delay(1);
-    // ESC.writeMicroseconds(45);
-    // delay(2000);
-    // Serial.println("Starting Wire");
-    // Wire.begin();
-    // Wire.setClock(400000);
-    // delay(250);
-    
-    // pinMode(13, OUTPUT);
     // digitalWrite(13, LOW);
 
-#if SERIAL_ON
-    Serial.begin(57600);
+#if SERIAL_ON || SERIAL_MONITOR || MAG_FOR_CALIB
+    Serial.begin(115200);
 #endif
 
 #if DISPLAY_ON
     tp_display.display_setup(display_type);
-    tp_display.printStatus("Calibrating Gyro");
+    tp_display.printStatus("Sensor Initialising");
 #endif
+
+#if SD_LOG_ON
+    if(!SD.begin(BUILTIN_SDCARD)){
+        tp_display.printStatus("SD intialisation failed!");
+    }
+    tp_display.printStatus("SD intialised!");
+    delay(1000);
+    myFile = SD.open("test.csv", FILE_WRITE);
+    if (myFile) {
+        tp_display.printStatus("File opened!");
+        String data = "time,gx,gy,gz,ax,ay,ax,mx,my,mz,P00,P01,P02,P03,P04,P05,P10,P11,P12,P13,P14,P15,P20,P21,P22,P23,P24,P25,P30,P31,P32,P33,P34,P35,P40,P41,P42,P43,P44,P45,P50,P51,P52,P53,P54,P55,K00,,,,,,,,,K10,,,,,,,,,K20,,,,,,,,,K30,,,,,,,,,K40,,,,,,,,,K50,,,,,,,,K58";
+        data.append(",P00,P01,P02,P03,P04,P05,P10,P11,P12,P13,P14,P15,P20,P21,P22,P23,P24,P25,P30,P31,P32,P33,P34,P35,P40,P41,P42,P43,P44,P45,P50,P51,P52,P53,P54,P55,K00,,,,,,,,,K10,,,,,,,,,K20,,,,,,,,,K30,,,,,,,,,K40,,,,,,,,,K50,,,,,,,,K58");
+        data.append(",P00,P01,P02,P03,P04,P05,P10,P11,P12,P13,P14,P15,P20,P21,P22,P23,P24,P25,P30,P31,P32,P33,P34,P35,P40,P41,P42,P43,P44,P45,P50,P51,P52,P53,P54,P55,K00,,,,,,,,,K10,,,,,,,,,K20,,,,,,,,,K30,,,,,,,,,K40,,,,,,,,,K50,,,,,,,,K58");
+        myFile.println(data);
+        delay(1000);
+    }
+#endif
+
     debugln("Init and Calib Sensors");
-    
-    // tp_estimator.init_sensors();
-    // tp_estimator.init_estimator();
 #if DISPLAY_ON
-    tp_display.printStatus("Estimator Running");
+    tp_display.printStatus("Sensor & Estimator Initialising");
 #endif
 
-    // delay(500);
-    // int count = 6, ret;
+    tp_estimator.init_sensors();
+    tp_estimator.init_estimator();
 
-//
-// *************************************************************************
-//
+#if DISPLAY_ON
+    tp_display.printStatus("ESC Initialising");
+#endif
 
-    // Initialize the CMD subsystem
-    // tp_display.printStatus("Initializing DSHOT");
-    // ESCCMD_init(count);//ESCPID_NB_ESC );
-    // delay(4000);
+    ESC_setup();
 
-    // Arming ESCs
-    // tp_display.printStatus("Arming All");
-    // ret = ESCCMD_arm_all( );
-    // ret = DSHOT_arm();
-    // tp_display.printStatus(ret);
-    // delay(2000);
-
-    // Switch 3D mode on
-    // tp_display.printStatus("Beep");
-    // ret = ESCCMD_beep(); 
-    // tp_display.printStatus(ret);
-    // delay(2000);
-
-    // tp_display.printStatus("3d off");
-    // // Switch 3D mode on
-    // ESCCMD_3D_off(); 
-    // delay(2000);
-
-    // tp_display.printStatus("Arming All");
-    // // Arming ESCs
-    // ESCCMD_arm_all( );
-    // delay(3000);
-
-
-    // tp_display.printStatus("start timer");
-    // Start periodic loop
-    // ret = ESCCMD_start_timer( );
-    // tp_display.printStatus(ret);
-    // delay(2000);
-
-
-    // tp_display.printStatus("stop all");
-    // Stop all motors
-    // for ( int i = 0; i < count; i++ ) {//ESCPID_NB_ESC
-        // ESCCMD_stop( i );
-        // analogWrite(4, 100);
-        // delay(3000);
-        // analogWrite(4, 0);
+    // for(int i = 0; i<300; i+=1){
+    //     set_motor_speeds(1000+i, 1000+i, 1000+i, 1000+i);
+    //     delay(10);
     // }
-    // delay(2000);
-
-    // tp_display.printStatus("Estimator Running");
-    // startDshot(); // sets the DMA up and disables telemetry for initialization
-
-    // armingMotor(); // arms the motor by sending 0 command at least 10 times
-    // delay(500); // for debug - giving time to esc to say "ARMED"
-
-    // disable3d(); // enables the 3D flight mode
-    // setControlLoopFrequency(DSHOT_FREQ); // sets the control loop frequency for rpm control
-    // disableTlm(); // enables the telemetry
-    speed = 0;
+    set_motor_speeds(1000, 1000, 1000, 1000);
+    control_start_time = micros();
+#if DISPLAY_ON
+    tp_display.printStatus("Main Loop Running");
+#endif
 }
 
-void loop() {
-    // start_time = micros();
-    // // if (speed < 1000)
-    //     speed++;
-    // // else
-    //     // speed = 0;
-    // // ESCCMD_beep();
-    // static int    i, ret;
-    // // static uint16_t            cmd[4]; 
-    // if (speed < 10000) ret = ESCCMD_tic( );
-    
-    // if ( speed < 10000 ){//&& ret == ESCCMD_TIC_OCCURED )  {
-    //     for ( i = 0; i < 4; i++ ) {
-    // //         // cmd[i] = DSHOT_CMD_MAX + 1 + 300;
-    //     // if(speed >100000)
-    //         ret = ESCCMD_throttle( i, (int16_t)100);
-    // //         ESCCMD_stop(i);
-            
-    // //         // tp_display.printStatus(ret);
-    //     }
-    //     // DSHOT_send(cmd, 0);
-    //     // ret = ESCCMD_beep(); 
-    // }
-    // if (speed > 10000){
-    //         for ( int i = 0; i < 4; i++ ) //ESCPID_NB_ESC
-    //     ESCCMD_stop( i );
-    // }
-
-    while(micros() - start_time < 1000);
+bool ready = false;
+const int throw_delay = 200;
 
 /*
+    ******************************************* loop *******************************************
+*/
+
+void loop() {
+
     start_time = micros();
 
     tp_estimator.read_sensors();
-    read_time = micros() - start_time;
+    read_time = micros() - start_time; 
 
     tp_estimator.estimate_attitude();
     estimate_time = micros() - start_time - read_time;
 
+    if (digitalRead(8) == LOW)  // Button Pressed
+        ready = true;
+    if (ready == true && digitalRead(8) == HIGH){   // Button Released
+        control_start_time = micros();
+        ready = false;
+        delay(throw_delay);
+    }
+
+    static Vector3f M, M2;
+    float f;
+    const float m = 1, g=1;
+    int v[4];
+    static Matrix3f R;
+    tp_estimator.q.rotation_matrix(R);
+    M = SO3_attitude_control( R, tp_estimator.omega);
+    M2 = euler_attitude_control( R, tp_estimator.omega);
+    f = m*g*R.c.z;
+    if((micros() - control_start_time)*1000000 < 10 && ready == false){ // Button Not Pressed
+        // command_motors(f, M, v);
+    }
+    else{
+        v[0] = v[1] = v[2] = v[3] = 1000;
+        set_motor_speeds(1000, 1000, 1000, 1000);
+    }
+
+
+#if SD_LOG_ON
+    static int sd_log_count = 0;
+    static String data;
+    if(sd_log_count < 110 && myFile){
+        data = String(start_time);
+                    // + "," + String(tp_estimator.GyroRate.x, 6) 
+                    // + "," + String(tp_estimator.GyroRate.y, 6) 
+                    // + "," + String(tp_estimator.GyroRate.z, 6)
+                    // + "," + String(tp_estimator.UnitAccVect.x, 6) 
+                    // + "," + String(tp_estimator.UnitAccVect.y, 6) 
+                    // + "," + String(tp_estimator.UnitAccVect.z, 6)
+                    // + "," + String(tp_estimator.UnitMagVect.x, 6) 
+                    // + "," + String(tp_estimator.UnitMagVect.y, 6) 
+                    // + "," + String(tp_estimator.UnitMagVect.z, 6);
+        for(int i =0; i<36; i++)
+                data.append("," + String(tp_estimator.tp_mekf2.P[i] , 6));
+        for(int i = 0; i<6; i++)
+            for(int j =0; j<9; j++)
+                data.append("," + String(tp_estimator.tp_mekf2.K[i*9+j], 6));
+
+        for(int i =0; i<36; i++)
+                data.append("," + String(tp_estimator.tp_mekf2_acc.P[i] , 6));
+        for(int i = 0; i<6; i++)
+            for(int j =0; j<9; j++)
+                data.append("," + String(tp_estimator.tp_mekf2_acc.K[i*9+j], 6));
+
+        for(int i =0; i<36; i++)
+                data.append("," + String(tp_estimator.tp_mekf2_triad.P[i] , 6));
+        for(int i = 0; i<6; i++)
+            for(int j =0; j<9; j++)
+                data.append("," + String(tp_estimator.tp_mekf2_triad.K[i*9+j], 6));
+
+        myFile.println(data);
+        sd_log_count ++;
+    }
+    if(sd_log_count == 110){
+        myFile.close();
+        tp_display.printStatus("Done Logging");
+        sd_log_count ++;
+    }
+#endif
+
+
     // ------------------- For Serial Plotter -------------------------
 #if DISPLAY_ON
     static int display_skip_count = 0;
-    if(display_skip_count > 5){
+    if(display_skip_count > 50){
 
 #if ESTIMATOR == BKF
         tp_display.draw_euler_deg(tp_estimator.tp_bkf.attitude_euler.x, tp_estimator.tp_bkf.attitude_euler.y, tp_estimator.tp_bkf.attitude_euler.z);
@@ -271,7 +213,7 @@ void loop() {
         debug(tp_estimator.tp_bkf.accel_roll);
         debug(tp_estimator.tp_bkf.accel_pitch);
         debugln(tp_estimator.tp_bkf.mag_yaw);
-#elif ESTIMATOR == TRIAD
+#elif ESTIMATOR == TRIAD 
         tp_display.draw_acc_mag_in_ball(tp_estimator.UnitAccVect, tp_estimator.UnitMagVect);
         // tp_display.draw_acc_mag_in_ball2(tp_estimator.tp_triad.c2, tp_estimator.tp_triad.m);
         tp_display.printVector(tp_estimator.UnitAccVect, 10, 80);
@@ -299,15 +241,35 @@ void loop() {
 
         // tp_display.printVector(tp_ekf.v_m, 10, 150, ILI9341_MAGENTA);
         // tp_display.printVector(tp_ekf.mpu.GyroRate, 280, 50);
-#elif ESTIMATOR == MEKF2
-        tp_display.drawCube(tp_estimator.tp_mekf2.get_q());
+#elif ESTIMATOR == MEKF2 || ESTIMATOR == ALL_ESTIMATORS
+        tp_display.drawCube(tp_estimator.q);
         tp_display.draw_acc_mag_in_ball(tp_estimator.tp_mekf2.a_p.tofloat(), tp_estimator.tp_mekf2.m_p.tofloat());
         tp_display.draw_acc_mag_in_ball2(tp_estimator.tp_mekf2.a_m, tp_estimator.tp_mekf2.m_m);
 
+        tp_display.printStatus(tp_estimator.tp_mekf2.get_a_res_norm()*10000);
+        tp_display.printStatus(tp_estimator.tp_mekf2.get_m_res_norm()*10000, 150);
         // // tp_display.printVector(tp_ekf.v_a, 10, 90, ILI9341_BLUE);
 
-        // tp_display.printVector(tp_estimator.tp_mekf2.a_m, 10, 150, ILI9341_MAGENTA);
-        // tp_display.printVector(tp_estimator.tp_mekf2.m_m, 10, 80);
+        tp_display.printVector(tp_estimator.tp_mekf2.a_m, 10, 150, ILI9341_MAGENTA);
+        tp_display.printVector(tp_estimator.tp_mekf2.m_m, 10, 80);
+        
+#elif ESTIMATOR == MEKF2_TRIAD || ESTIMATOR == MEKF2_COMPARE
+        tp_display.drawCube(tp_estimator.q);
+        tp_display.draw_acc_mag_in_ball(tp_estimator.tp_mekf2_triad.a_p.tofloat(), tp_estimator.tp_mekf2_triad.m_p.tofloat());
+        tp_display.draw_acc_mag_in_ball2(tp_estimator.tp_mekf2_triad.a_m, tp_estimator.tp_mekf2_triad.m_m);
+
+        tp_display.printStatus(tp_estimator.tp_mekf2_triad.get_a_res_norm()*10000);
+        tp_display.printStatus(tp_estimator.tp_mekf2_triad.get_m_res_norm()*10000, 150);
+        // // tp_display.printVector(tp_ekf.v_a, 10, 90, ILI9341_BLUE);
+
+        tp_display.printVector(tp_estimator.tp_mekf2_triad.a_m, 10, 150, ILI9341_MAGENTA);
+        tp_display.printVector(tp_estimator.tp_mekf2_triad.m_m, 10, 80);
+
+        tp_display.printVector(M, 110, 80, ILI9341_ORANGE);
+        tp_display.printVector(M2, 140, 80, ILI9341_ORANGE);
+        tp_display.printStatus(f*100, 110, 60);
+        tp_display.printVel(v, 110, 150, ILI9341_ORANGE);
+        
 #endif
         
 
@@ -321,6 +283,7 @@ void loop() {
         // tp_display.printTime(micros() - start_time);
         // tp_display.printTime(tp_estimator.dt*1000000);
         display_skip_count = 0;
+
     }
     
     if(display_skip_count == 0) // ==1 to see on display interation (read+estimate+display time), 
@@ -329,8 +292,129 @@ void loop() {
     display_skip_count++;
 #endif
 
-#if DISPLAY_ON
-    // tp_display.printTime(micros() - loop_timer);
+#if SERIAL_MONITOR
+    static int serial_skip_count = 0;
+    if(serial_skip_count > 50){
+        static Quaternion q;
+        q = tp_estimator.tp_mekf2.get_q();
+        Serial.print(q.q1);        Serial.print(",");
+        Serial.print(q.q2);        Serial.print(",");
+        Serial.print(q.q3);        Serial.print(",");
+        Serial.print(q.q4);        Serial.print(",");
+
+        q = tp_estimator.tp_mekf2_acc.get_q();
+        Serial.print(q.q1);        Serial.print(",");
+        Serial.print(q.q2);        Serial.print(",");
+        Serial.print(q.q3);        Serial.print(",");
+        Serial.print(q.q4);        Serial.print(",");
+
+        q = tp_estimator.tp_mekf2_triad.get_q();
+        Serial.print(q.q1);        Serial.print(",");
+        Serial.print(q.q2);        Serial.print(",");
+        Serial.print(q.q3);        Serial.print(",");
+        Serial.print(q.q4);        Serial.print(",");
+
+
+        static Vector3f a_m, m_m, a_p, m_p;
+
+        a_m = tp_estimator.tp_mekf2.a_m;
+        m_m = tp_estimator.tp_mekf2.m_m;
+        a_p = tp_estimator.tp_mekf2.a_p.tofloat();
+        m_p = tp_estimator.tp_mekf2.m_p.tofloat();
+
+        Serial.print(a_m.x);        Serial.print(",");
+        Serial.print(a_m.y);        Serial.print(",");
+        Serial.print(a_m.z);        Serial.print(",");
+
+        Serial.print(m_m.x);        Serial.print(",");
+        Serial.print(m_m.y);        Serial.print(",");
+        Serial.print(m_m.z);        Serial.print(","); 
+
+        Serial.print(a_p.x);        Serial.print(",");
+        Serial.print(a_p.y);        Serial.print(",");
+        Serial.print(a_p.z);        Serial.print(",");
+
+        Serial.print(m_p.x);        Serial.print(",");
+        Serial.print(m_p.y);        Serial.print(",");
+        Serial.print(m_p.z);        Serial.print(","); 
+
+        a_m = tp_estimator.tp_mekf2_acc.a_m;
+        m_m = tp_estimator.tp_mekf2_acc.m_m;
+        a_p = tp_estimator.tp_mekf2_acc.a_p.tofloat();
+        m_p = tp_estimator.tp_mekf2_acc.m_p.tofloat();
+
+        Serial.print(a_m.x);        Serial.print(",");
+        Serial.print(a_m.y);        Serial.print(",");
+        Serial.print(a_m.z);        Serial.print(",");
+
+        Serial.print(m_m.x);        Serial.print(",");
+        Serial.print(m_m.y);        Serial.print(",");
+        Serial.print(m_m.z);        Serial.print(","); 
+
+        Serial.print(a_p.x);        Serial.print(",");
+        Serial.print(a_p.y);        Serial.print(",");
+        Serial.print(a_p.z);        Serial.print(",");
+
+        Serial.print(m_p.x);        Serial.print(",");
+        Serial.print(m_p.y);        Serial.print(",");
+        Serial.print(m_p.z);        Serial.print(","); 
+
+        a_m = tp_estimator.tp_mekf2_triad.a_m;
+        m_m = tp_estimator.tp_mekf2_triad.m_m;
+        a_p = tp_estimator.tp_mekf2_triad.a_p.tofloat();
+        m_p = tp_estimator.tp_mekf2_triad.m_p.tofloat();
+
+        Serial.print(a_m.x);        Serial.print(",");
+        Serial.print(a_m.y);        Serial.print(",");
+        Serial.print(a_m.z);        Serial.print(",");
+
+        Serial.print(m_m.x);        Serial.print(",");
+        Serial.print(m_m.y);        Serial.print(",");
+        Serial.print(m_m.z);        Serial.print(","); 
+
+        Serial.print(a_p.x);        Serial.print(",");
+        Serial.print(a_p.y);        Serial.print(",");
+        Serial.print(a_p.z);        Serial.print(",");
+
+        Serial.print(m_p.x);        Serial.print(",");
+        Serial.print(m_p.y);        Serial.print(",");
+        Serial.println(m_p.z); 
+
+        serial_skip_count = 0;
+    }
+    serial_skip_count++;
+#endif
+#if SERIAL_FOR_AHRSs
+    static int serial_skip_count = 0;
+    if(serial_skip_count > 50){
+        static Quaternion q;
+        q.from_rotation_matrix(tp_estimator.tp_triad.DCM);
+        Serial.print(q.q1);        Serial.print(",");
+        Serial.print(q.q2);        Serial.print(",");
+        Serial.print(q.q3);        Serial.print(",");
+        Serial.print(q.q4);        Serial.print(",");
+
+        q = tp_estimator.tp_mekf.get_q();
+        Serial.print(q.q1);        Serial.print(",");
+        Serial.print(q.q2);        Serial.print(",");
+        Serial.print(q.q3);        Serial.print(",");
+        Serial.print(q.q4);        Serial.print(",");
+
+        q = tp_estimator.tp_mekf2.get_q();
+        Serial.print(q.q1);        Serial.print(",");
+        Serial.print(q.q2);        Serial.print(",");
+        Serial.print(q.q3);        Serial.print(",");
+        Serial.print(q.q4);        Serial.print(",");
+
+        q = tp_estimator.tp_mekf2_triad.get_q();
+        Serial.print(q.q1);        Serial.print(",");
+        Serial.print(q.q2);        Serial.print(",");
+        Serial.print(q.q3);        Serial.print(",");
+        Serial.println(q.q4);
+        
+        serial_skip_count = 0;
+    }
+    serial_skip_count++;
 #endif
 
 #if MAG_FOR_CALIB
@@ -342,7 +426,8 @@ void loop() {
     Serial.println(int(tp_estimator.MagRaw.z));
     while(micros() - start_time < 5000);
 #endif
-*/
+
+
 }
 
 

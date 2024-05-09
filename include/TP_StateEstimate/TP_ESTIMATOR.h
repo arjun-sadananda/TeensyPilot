@@ -10,7 +10,7 @@
 
 #include <Arduino.h>
 #include "Wire.h"
-#include "AP_Math.h"
+// #include "AP_Math.h"
 
 
 #include "TP_StateEstimate\TP_BKF.h"
@@ -19,14 +19,17 @@
 #include "TP_StateEstimate\TP_MEKF.h"
 #include "TP_StateEstimate\TP_MEKF2.h"
 
-#define BKF 0
-#define TRIAD 1 
-#define EKF 2
+#define BKF 0           // old stuff
+#define TRIAD 1         
+#define EKF 2           // Not working
 #define MEKF_acc 3
 #define MEKF_mag 4
 #define MEKF2 5
+#define MEKF2_TRIAD 6
+#define ALL_ESTIMATORS 7
+#define MEKF2_COMPARE 8
 
-#define ESTIMATOR MEKF_acc
+#define ESTIMATOR MEKF2_COMPARE
 
 #define MPU_QMC 0
 #define LSM9D 1 
@@ -50,20 +53,35 @@ public:
     Vector3f MagRaw;
     Vector3f GyroRate, UnitAccVect, UnitMagVect;
     Vector3f a_ref, m_ref;
+    Quaternion q;
+    Vector3f omega;
 
 #if ESTIMATOR == BKF
     TP_BKF tp_bkf;
-#elif ESTIMATOR == TRIAD
+#endif
+#if ESTIMATOR == TRIAD || ESTIMATOR == ALL_ESTIMATORS
     TP_TRIAD tp_triad;
-#elif ESTIMATOR == EKF
+#endif
+#if ESTIMATOR == EKF
     TP_EKF tp_ekf;
-#elif ESTIMATOR == MEKF_acc || ESTIMATOR == MEKF_mag
+#endif
+#if ESTIMATOR == MEKF_acc || ESTIMATOR == MEKF_mag || ESTIMATOR == ALL_ESTIMATORS
     TP_MEKF tp_mekf;
-#elif ESTIMATOR == MEKF2
+#endif
+#if ESTIMATOR == MEKF2 || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
     TP_MEKF2 tp_mekf2;
 #endif
-
+#if ESTIMATOR == MEKF2_TRIAD || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
+    TP_MEKF2 tp_mekf2_triad;
+#endif
+#if ESTIMATOR == MEKF2_COMPARE
+    TP_MEKF2 tp_mekf2_acc;
+#endif
     void init_sensors(){
+        Wire.begin();
+        Wire.setClock(400000);
+        delay(250);
+    
 #if SENSORS == MPU_QMC
         mpu.mpu_setup();
         mag.mag_setup();
@@ -79,6 +97,14 @@ public:
 #endif
         delay(250); 
     }
+
+    /*
+        Initialise Estimators
+
+        Calibrate Gyro
+        Set m_ref and a_ref
+        Initialise Estimators
+    */
     void init_estimator(){
 #if ESTIMATOR == BKF
         mpu.calibrate_gyro();
@@ -90,16 +116,29 @@ public:
         mpu.calibrate_gyro();
         mag.set_m_ref();
         tp_ekf.init_estimator(mpu.a_ref, mag.m_ref);
-#elif ESTIMATOR == MEKF_acc
+#endif
+#if ESTIMATOR == MEKF_acc || ESTIMATOR == ALL_ESTIMATORS
         tp_mekf.init_estimator(a_ref);
-#elif ESTIMATOR == MEKF_mag
+#endif
+#if ESTIMATOR == MEKF_mag 
         // mpu.calibrate_gyro();
         // mag.set_m_ref();
         tp_mekf.init_estimator(m_ref);
-#elif ESTIMATOR == MEKF2
+#endif
+#if ESTIMATOR == MEKF2 || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
         // mpu.calibrate_gyro();
         // mag.set_m_ref();
-        tp_mekf2.init_estimator(a_ref, m_ref);
+        tp_mekf2.init_estimator(a_ref, m_ref, false, 1.0e-3);
+#endif 
+#if ESTIMATOR == MEKF2_TRIAD || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
+        // mpu.calibrate_gyro();
+        // mag.set_m_ref();
+        tp_mekf2_triad.init_estimator(a_ref, m_ref, true, 1.0e-3);
+#endif
+#if ESTIMATOR == MEKF2_COMPARE
+        // mpu.calibrate_gyro();
+        // mag.set_m_ref();
+        tp_mekf2_acc.init_estimator(a_ref, m_ref, false, 5.0e-3);
 #endif
     }
 
@@ -111,10 +150,10 @@ public:
         }
         mpu.read_accel();
         UnitAccVect.set(mpu.UnitAccVect.x, mpu.UnitAccVect.y, mpu.UnitAccVect.z);
-        if (ESTIMATOR == MEKF_mag || ESTIMATOR == MEKF2 || ESTIMATOR == TRIAD || ESTIMATOR == BKF){
-                mag.read_mag();
-                UnitMagVect.set(mag.UnitMagVect.x, mag.UnitMagVect.y, mag.UnitMagVect.z);
-        }
+        // if (ESTIMATOR == MEKF_mag || ESTIMATOR == MEKF2 || ESTIMATOR == TRIAD || ESTIMATOR == BKF){
+        mag.read_mag();
+        UnitMagVect.set(mag.UnitMagVect.x, mag.UnitMagVect.y, mag.UnitMagVect.z);
+        // }
         MagRaw.set(mag.MagRaw.x, mag.MagRaw.y, mag.MagRaw.z);
 #elif SENSORS == LSM9D
         lsm9ds1.read_sensors();
@@ -136,17 +175,31 @@ public:
         prev_t = micros();
 #if ESTIMATOR == BKF
         tp_bkf.estimate_attitude(mag.UnitMagVect, mpu.UnitAccVect, mpu.GyroRate, dt);
-#elif ESTIMATOR == TRIAD
-        tp_triad.estimate_attitude(UnitMagVect, UnitAccVect);
-#elif ESTIMATOR == EKF
-        tp_ekf.estimate_attitude(mag.UnitMagVect, mpu.UnitAccVect, mpu.GyroRate, dt);
-#elif ESTIMATOR == MEKF_acc
-        tp_mekf.estimate_attitude(UnitAccVect, GyroRate, dt);
-#elif ESTIMATOR == MEKF_mag
-        tp_mekf.estimate_attitude(UnitMagVect, GyroRate, dt);
-#elif ESTIMATOR == MEKF2
-        tp_mekf2.estimate_attitude(UnitMagVect, UnitAccVect, GyroRate, dt);
 #endif
-        
+#if ESTIMATOR == TRIAD || ESTIMATOR == ALL_ESTIMATORS
+        tp_triad.estimate_attitude(UnitMagVect, UnitAccVect);
+        q.from_rotation_matrix(tp_triad.DCM);
+#endif
+#if ESTIMATOR == EKF
+        tp_ekf.estimate_attitude(mag.UnitMagVect, mpu.UnitAccVect, mpu.GyroRate, dt);
+#endif
+#if ESTIMATOR == MEKF_acc || ESTIMATOR == ALL_ESTIMATORS
+        tp_mekf.estimate_attitude(UnitAccVect, GyroRate, dt);
+#endif
+#if ESTIMATOR == MEKF_mag
+        tp_mekf.estimate_attitude(UnitMagVect, GyroRate, dt);
+#endif
+#if ESTIMATOR == MEKF2 || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
+        tp_mekf2.estimate_attitude(UnitMagVect, UnitAccVect, GyroRate, dt);
+        q = tp_mekf2.get_q();
+#endif
+#if ESTIMATOR == MEKF2_TRIAD || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
+        tp_mekf2_triad.estimate_attitude(UnitMagVect, UnitAccVect, GyroRate, dt);
+        q = tp_mekf2_triad.get_q();
+        omega = tp_mekf2_triad.get_omega();
+#endif
+#if ESTIMATOR == MEKF2_COMPARE
+        tp_mekf2_acc.estimate_attitude(UnitMagVect, UnitAccVect, GyroRate, dt);
+#endif
     }
 };

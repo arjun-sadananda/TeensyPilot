@@ -15,15 +15,18 @@
 
 // Copyright 2012 Andrew Tridgell, all rights reserved.
 // Refactored by Jonathan Challinger
+
+/*
+ *
+ * Math Classes used in ArduPilot stripped down to the bare minimum needed for TeensyPilot.
+ * - by Arjun Sadananda - 05/2024
+ * Quaternion, Matrix3, Vector3, Vector2
+ * 
+ */
+
 #pragma once
 
-// #include "definitions.h"
 #include "matrix3.h"
-#include <cmath>
-#if MATH_CHECK_INDEXES
-#include <assert.h>
-#endif
-#include <math.h>
 
 template <typename T>
 class QuaternionT {
@@ -62,7 +65,7 @@ public:
     // check if any elements are NAN
     bool        is_nan(void) const// WARN_IF_UNUSED
     {
-        return isnan(q1) || isnan(q2) || isnan(q3) || isnan(q4);
+        return std::isnan(q1) || std::isnan(q2) || std::isnan(q3) || std::isnan(q4);
     }
 
     // populate the supplied rotation matrix equivalent from this quaternion

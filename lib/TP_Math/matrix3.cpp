@@ -16,21 +16,38 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
+/*
+ *
+ * Math Classes used in ArduPilot stripped down to the bare minimum needed for TeensyPilot.
+ * - by Arjun Sadananda - 05/2024
+ * Quaternion, Matrix3, Vector3, Vector2
+ * 
+ */
+
 #pragma GCC optimize("O2")
 
-#include "AP_Math.h"
+#include "matrix3.h"
+
+inline bool is_zero(const float x) {
+    return fabsf(x) < FLT_EPSILON;
+}
+
+inline bool is_zero(const double x) {
+    return fabs(x) < FLT_EPSILON;
+}
 
 // create a rotation matrix given some euler angles
 // this is based on http://gentlenav.googlecode.com/files/EulerAngles.pdf
 template <typename T>
 void Matrix3<T>::from_euler(T roll, T pitch, T yaw)
 {
-    const T cp = cosF(pitch);
-    const T sp = sinF(pitch);
-    const T sr = sinF(roll);
-    const T cr = cosF(roll);
-    const T sy = sinF(yaw);
-    const T cy = cosF(yaw);
+    const T cp = cos(pitch);
+    const T sp = sin(pitch);
+    const T sr = sin(roll);
+    const T cr = cos(roll);
+    const T sy = sin(yaw);
+    const T cy = cos(yaw);
 
     a.x = cp * cy;
     a.y = (sr * sp * cy) - (cr * sy);
@@ -49,13 +66,13 @@ template <typename T>
 void Matrix3<T>::to_euler(T *roll, T *pitch, T *yaw) const
 {
     if (pitch != nullptr) {
-        *pitch = -safe_asin(c.x);
+        *pitch = -asin(c.x);
     }
     if (roll != nullptr) {
-        *roll = atan2F(c.y, c.z);
+        *roll = atan2(c.y, c.z);
     }
     if (yaw != nullptr) {
-        *yaw = atan2F(b.x, a.x);
+        *yaw = atan2(b.x, a.x);
     }
 }
 
@@ -80,9 +97,9 @@ void Matrix3<T>::from_rotation(enum Rotation rotation)
 template <typename T>
 Vector3<T> Matrix3<T>::to_euler312() const
 {
-    return Vector3<T>(asinF(c.y),
-                      atan2F(-c.x, c.z),
-                      atan2F(-a.y, b.y));
+    return Vector3<T>(asin(c.y),
+                      atan2(-c.x, c.z),
+                      atan2(-a.y, b.y));
 }
 
 /*
@@ -91,12 +108,12 @@ Vector3<T> Matrix3<T>::to_euler312() const
 template <typename T>
 void Matrix3<T>::from_euler312(T roll, T pitch, T yaw)
 {
-    const T c3 = cosF(pitch);
-    const T s3 = sinF(pitch);
-    const T s2 = sinF(roll);
-    const T c2 = cosF(roll);
-    const T s1 = sinF(yaw);
-    const T c1 = cosF(yaw);
+    const T c3 = cos(pitch);
+    const T s3 = sin(pitch);
+    const T s2 = sin(roll);
+    const T c2 = cos(roll);
+    const T s1 = sin(yaw);
+    const T c1 = cos(yaw);
 
     a.x = c1 * c3 - s1 * s2 * s3;
     b.y = c1 * c2;
@@ -235,20 +252,20 @@ void Matrix3<T>::zero(void)
     c.x = c.y = c.z = 0;
 }
 
-template <typename T>
-void Matrix3<T>::skew_from_vector(const Vector3<T> &v){
-    a.set(0, -v.z, v.y);
-    b.set(v.z, 0, -v.x);
-    c.set(-v.y, v.x, 0);
-}
+// template <typename T>
+// void Matrix3<T>::skew_from_vector(const Vector3<T> &v){
+//     a.set(0, -v.z, v.y);
+//     b.set(v.z, 0, -v.x);
+//     c.set(-v.y, v.x, 0);
+// }
 
 // create rotation matrix for rotation about the vector v by angle theta
 // See: http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToMatrix/
 template <typename T>
 void Matrix3<T>::from_axis_angle(const Vector3<T> &v, T theta)
 {
-    const T C = cosF(theta);
-    const T S = sinF(theta);
+    const T C = cos(theta);
+    const T S = sin(theta);
     const T t = 1.0f - C;
     const Vector3<T> normv = v.normalized();
     const T x = normv.x;

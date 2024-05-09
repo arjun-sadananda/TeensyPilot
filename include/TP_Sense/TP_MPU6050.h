@@ -60,7 +60,7 @@ public:
         Gyro.x = Wire.read() << 8 | Wire.read();                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
         Gyro.y = Wire.read() << 8 | Wire.read();                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
         Gyro.z = Wire.read() << 8 | Wire.read();                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
-        GyroRate = Gyro.tofloat() / 65.536 *AP_DEG_TO_RAD;  //integer to deg/sec  /////////////////////////////////work with int instead?
+        GyroRate = Gyro.tofloat() / 65.536 *DEG_TO_RAD;  //integer to deg/sec  /////////////////////////////////work with int instead?
         GyroRate.rotate(TO_NED_FRAME);
         GyroRate -= GyroOffset;
     }

@@ -232,10 +232,12 @@ public:
         val |= LSM9DS1_MAGGAIN_4GAUSS;
         write8(LSM9DS1_ADDRESS_MAG, LIS3MDL_REG_CTRL_REG2, val);
         
-        HardOffsetVect.set(-720.637, 1365.0, 2270.015);
+        // HardOffsetVect.set(-720.637, 1365.0, 2270.015);
+        HardOffsetVect.set(-587.808893, 1041.364679, 2152.803319);
 
         // float temp[6] =  {1.29, 1.31, 1.28, 0.027, -0.0698, 0.01394};
-        float temp[6] =  {0.670999, 0.688844, 0.518978, 0.008017, 0.080208, -0.002301};
+        // float temp[6] =  {0.670999, 0.688844, 0.518978, 0.008017, 0.080208, -0.002301};
+        float temp[6] =  {0.547561, 0.553483, 0.590261, -0.023879, -0.005508, -0.002054};
         SoftCalibMat.a.set(temp[0], temp[3], temp[4]);
         SoftCalibMat.b.set(temp[3], temp[1], temp[5]);
         SoftCalibMat.c.set(temp[4], temp[5], temp[2]);
@@ -247,11 +249,11 @@ public:
         Wire.write(LSM9DS1_REGISTER_OUT_X_L_G);                                                //Register 67-72 - Gyroscope Measurements
         Wire.endTransmission();
         Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
-        Vector3i Gyro;
+        Vector3i Gyro; // all neg
         Gyro.x =  (Wire.read() | Wire.read() << 8);                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
         Gyro.y =  (Wire.read() | Wire.read() << 8);                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
         Gyro.z = -(Wire.read() | Wire.read() << 8);                  //67 GYRO_XOUT[15:8] and 68 GYRO_XOUT[7:0]
-        GyroRate = Gyro.tofloat() / 65.536 *AP_DEG_TO_RAD;  //integer to deg/sec  /////////////////////////////////work with int instead?
+        GyroRate = Gyro.tofloat() / 65.536 *DEG_TO_RAD;  //integer to deg/sec  /////////////////////////////////work with int instead?
         // GyroRate.rotate(TO_NED_FRAME);
         GyroRate -= GyroOffset;
 
@@ -260,10 +262,10 @@ public:
         Wire.write(LSM9DS1_REGISTER_OUT_X_L_XL);  //Register 59-64 - Accelerometer Measurements
         Wire.endTransmission();
         Wire.requestFrom(LSM9DS1_ADDRESS_ACCELGYRO, 6);
-        Vector3i AccLSB;
-        AccLSB.x = -(Wire.read() | Wire.read() << 8);  //59 ACCEL_XOUT[15:8] and 60 ACCEL_XOUT[7:0]
-        AccLSB.y = -(Wire.read() | Wire.read() << 8);  //61 ACCEL_YOUT[15:8] and 62 ACCEL_YOUT[7:0]
-        AccLSB.z =  (Wire.read() | Wire.read() << 8);  //63 ACCEL_ZOUT[15:8] and 64 ACCEL_ZOUT[7:0]
+        Vector3i AccLSB; // all pos
+        AccLSB.x =  -(Wire.read() | Wire.read() << 8);  //59 ACCEL_XOUT[15:8] and 60 ACCEL_XOUT[7:0] -
+        AccLSB.y =  -(Wire.read() | Wire.read() << 8);  //61 ACCEL_YOUT[15:8] and 62 ACCEL_YOUT[7:0] -
+        AccLSB.z =  (Wire.read() | Wire.read() << 8);  //63 ACCEL_ZOUT[15:8] and 64 ACCEL_ZOUT[7:0] +
         // to fix sign to MPU6050 frame negative stored
 
         AccelBody = AccLSB.tofloat()/4096 + AccelOffset;
@@ -276,9 +278,9 @@ public:
         int err = Wire.endTransmission();
         if(!err){
             Wire.requestFrom(LSM9DS1_ADDRESS_MAG, 6);
-            MagRaw.x = -(float)(int16_t)(Wire.read()|Wire.read()<<8);
-            MagRaw.y = (float)(int16_t)(Wire.read()|Wire.read()<<8);
-            MagRaw.z = -(float)(int16_t)(Wire.read()|Wire.read()<<8);
+            MagRaw.x = -(float)(int16_t)(Wire.read()|Wire.read()<<8);    // -
+            MagRaw.y = (float)(int16_t)(Wire.read()|Wire.read()<<8);    // +
+            MagRaw.z = -(float)(int16_t)(Wire.read()|Wire.read()<<8);    // -
         }
         //Calibration
         MagVect = SoftCalibMat*(MagRaw-HardOffsetVect);
@@ -291,12 +293,12 @@ public:
     void calibrate_gyro(){
         GyroOffset.zero();
         Vector3f temp_sum; //since offsets are used in read sensor functions
-        for (int i = 0; i < 2000; i++) {
+        for (int i = 0; i < 1000; i++) {
             read_sensors();
             temp_sum += GyroRate;
-            delay(1);
+            delayMicroseconds(100);
         }
-        GyroOffset = temp_sum/2000;
+        GyroOffset = temp_sum/1000;
     }
     void set_m_ref(){
         Vector3f sum;

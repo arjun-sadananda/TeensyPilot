@@ -44,11 +44,13 @@ public:
                         //  bx
         Wire.endTransmission();
 
-        HardOffsetVect.set(281.3, 1002.3, -322.54);
-        HardOffsetVect.set(281.839179, 1227.446283, -497.300555);
+        // HardOffsetVect.set(281.3, 1002.3, -322.54);
+        // HardOffsetVect.set(281.839179, 1227.446283, -497.300555);
+        HardOffsetVect.set(-4.351436, 744.005033, -102.588960);
 
         // float temp[6] =  {1.29, 1.31, 1.28, 0.027, -0.0698, 0.01394};
-        float temp[6] =  {1.320546, 1.152157, 1.301622, 0.000088, -0.026157, 0.122299};
+        // float temp[6] =  {1.320546, 1.152157, 1.301622, 0.000088, -0.026157, 0.122299};
+        float temp[6] =  {1.294398, 1.277933, 1.369600, 0.002373, -0.005930, -0.039244};
         SoftCalibMat.a.set(temp[0], temp[3], temp[4]);
         SoftCalibMat.b.set(temp[3], temp[1], temp[5]);
         SoftCalibMat.c.set(temp[4], temp[5], temp[2]);
