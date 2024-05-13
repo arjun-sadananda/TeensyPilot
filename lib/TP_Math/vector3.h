@@ -508,7 +508,10 @@ public:
     // returns the normalized version of this vector
     Vector3<T> normalized() const
     {
-        return *this/length();
+        if(length()!=0)
+            return *this/length();
+        else
+            return *this;
     }
     /*
       conversion to/from double

@@ -83,6 +83,7 @@ public:
 
     // convert a vector from earth to body frame
     void        earth_to_body(Vector3<T> &v) const;
+    Vector3<T>  ret_earth_to_body(Vector3<T> &v) const;
     Vector3<T>  gravity_vector() const;
 
     // create a quaternion from Euler angles

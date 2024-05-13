@@ -432,6 +432,16 @@ void QuaternionT<T>::earth_to_body(Vector3<T> &v) const
     rotation_matrix(m);
     v = m * v;
 }
+
+// convert a vector from earth to body frame
+template <typename T>
+Vector3<T> QuaternionT<T>::ret_earth_to_body(Vector3<T> &v) const
+{
+    Matrix3<T> m;
+    rotation_matrix(m);
+    return m * v;
+}
+
 //NED frame gravity vector. Used for getting predicted accel reading.
 template <typename T>
 Vector3<T> QuaternionT<T>::gravity_vector() const

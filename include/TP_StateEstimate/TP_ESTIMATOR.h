@@ -29,7 +29,7 @@
 #define ALL_ESTIMATORS 7
 #define MEKF2_COMPARE 8
 
-#define ESTIMATOR MEKF2_COMPARE
+#define ESTIMATOR MEKF2_TRIAD
 
 #define MPU_QMC 0
 #define LSM9D 1 

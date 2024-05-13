@@ -1,4 +1,18 @@
-
+/*
+ * TP_Display class for use with TeensyPilot for on-board visualisation and debugging.
+ * 
+ * It makes use of the optimised ILI9341 library for Teensy: https://github.com/PaulStoffregen/ILI9341_t3
+ * 
+ * It includes functions like:
+ *  - draw_acc_mag_in_ball(Vector3f, Vector3f): to draw two needles inside a ball; display is attached to body frame.
+ *  - drawCube(Quaternion) and drawCube(Matrix3f): to draw a inverse rotated cube. So cube stays fixed in gloabal frame, and display is like a camera in body frame.
+ *  - 
+ *  - printVector and printStatus for printing various types of values and strings like loop time, status, etc.
+ *  - and more...
+ * 
+ * Dependency: TP_Math libraries for working with various math objects.
+ * 
+ */
 #include <ILI9341_t3.h>
 #include <font_Arial.h>
 
@@ -12,12 +26,22 @@
 #include <string.h>
 
 
-#define ACC_MAG_BALL 1
-#define BKF_DISPLAY 2
-#define TRIAD_DISPLAY 3
-#define EKF_DISPLAY 4
-#define MEKF_DISPLAY 5
-#define MEKF2_DISPLAY 6
+/*
+ * Display Modes
+*/
+// #define ACC_MAG_BALL 1
+// #define BKF_DISPLAY 2
+// #define TRIAD_DISPLAY 3
+// #define EKF_DISPLAY 4
+// #define MEKF_DISPLAY 5
+// #define MEKF2_DISPLAY 6
+#define DISPLAY_OFF 0
+#define BKF_DISPLAY 1
+#define TWO_NEEDLE_BALL 2
+#define CUBE 3
+#define BALL_AND_CUBE 4
+#define DRONE_MONITOR 5
+
 
 class TP_Display{
 
@@ -30,23 +54,21 @@ private:
     ILI9341_t3 Display = ILI9341_t3(PIN_CS, PIN_DC);
 
     Vector3f vert[8];
+    float cube_size;
     Vector3f face_center[3], rot_face_center[3];
     Vector3f rot_vert[8];
     Vector2f cube_center, rp_center, y_center;
+    Vector2f vel_rect_corner;
+    int vel_rect_width = 100;
+    int vel_rect_height = 10;
     int rp_size;
 
-    Vector3f ball_center;
+    Vector2f ball_center;
     int ball_size;
 
 
 protected:
 public:
-    // TP_Display(){
-    //     // Display = Display;
-    //     // Display.CS
-    //     // ILI9341_t3 Display = ILI9341_t3(PIN_CS, PIN_DC);
-        
-    // }
     void display_setup(const int DISPLAY_MODE){
         
         C_DKBLUE = Display.color565(0, 0, 40);
@@ -65,31 +87,31 @@ public:
             case BKF_DISPLAY:
                 euler_display_setup();
                 break;
-            case ACC_MAG_BALL:
+            case TWO_NEEDLE_BALL:
                 ball_only_setup();
                 break;
-            case TRIAD_DISPLAY:
-            case EKF_DISPLAY:
-            case MEKF_DISPLAY:
-            case MEKF2_DISPLAY:
+            case BALL_AND_CUBE:
                 ball_and_cube_setup();
+                break;
+            case DRONE_MONITOR:
+                drone_monitor_setup();
                 break;
         }
     }
     
     void init_cube(){
-        vert[0].x = vert[1].x = vert[4].x = vert[5].x = -50.0;
-        vert[2].x = vert[3].x = vert[6].x = vert[7].x = 50.0;
+        vert[0].x = vert[1].x = vert[4].x = vert[5].x = -cube_size;
+        vert[2].x = vert[3].x = vert[6].x = vert[7].x = cube_size;
 
-        vert[0].y = vert[3].y = vert[4].y = vert[7].y = 50.0;
-        vert[1].y = vert[2].y = vert[5].y = vert[6].y = -50.0;
+        vert[0].y = vert[3].y = vert[4].y = vert[7].y = cube_size;
+        vert[1].y = vert[2].y = vert[5].y = vert[6].y = -cube_size;
 
-        vert[0].z = vert[1].z = vert[2].z = vert[3].z = -50.0;
-        vert[4].z = vert[5].z = vert[6].z = vert[7].z = 50.0;
+        vert[0].z = vert[1].z = vert[2].z = vert[3].z = -cube_size/2;
+        vert[4].z = vert[5].z = vert[6].z = vert[7].z = cube_size/2;
 
-        face_center[0].x = 50;
-        face_center[1].y = -50;
-        face_center[2].z = 50;
+        face_center[0].x = cube_size;
+        face_center[1].y = -cube_size;
+        face_center[2].z = cube_size;
     }
     void euler_display_setup(){
         cube_center.x = 220;
@@ -107,7 +129,6 @@ public:
     void ball_only_setup(){
         ball_center.x = 160;
         ball_center.y = 135;
-        ball_center.z = 0;
         ball_size = 85;
 
         Display.drawCircle(ball_center.x, ball_center.y, ball_size, ILI9341_WHITE);
@@ -115,16 +136,41 @@ public:
     void ball_and_cube_setup(){
         ball_center.x = 75;
         ball_center.y = 135;
-        ball_center.z = 0;
         ball_size = 60;
 
         Display.drawCircle(ball_center.x, ball_center.y, ball_size, ILI9341_WHITE);
         
         cube_center.x = 220;
         cube_center.y = 125;
+        cube_size = 75.0;
         init_cube();
     }
+    void drone_monitor_setup(){
+        ball_center.x = 250;
+        ball_center.y = 80;
+        ball_size = 35;
 
+        Display.drawCircle(ball_center.x, ball_center.y, ball_size, ILI9341_WHITE);
+        
+        cube_center.x = 250;
+        cube_center.y = 175;
+        cube_size = 35.0;
+        init_cube();
+
+        vel_rect_corner.x = 20;
+        vel_rect_corner.y = 150;
+        vel_rect_width = 60;
+        vel_rect_height = 8;
+
+        Display.drawRect(vel_rect_corner.x-1,                       vel_rect_corner.y-1, 
+                                        vel_rect_width+2, vel_rect_height+2, ILI9341_WHITE);
+        Display.drawRect(vel_rect_corner.x-1 + vel_rect_width + 10, vel_rect_corner.y-1, 
+                                        vel_rect_width+2, vel_rect_height+2, ILI9341_WHITE);
+        Display.drawRect(vel_rect_corner.x-1,                       vel_rect_corner.y-1 + vel_rect_height + 10, 
+                                        vel_rect_width+2, vel_rect_height+2, ILI9341_WHITE);
+        Display.drawRect(vel_rect_corner.x-1 + vel_rect_width + 10, vel_rect_corner.y-1 + vel_rect_height + 10, 
+                                        vel_rect_width+2, vel_rect_height+2, ILI9341_WHITE);
+    }
 
     void printTime(int t){//-90deg to 90deg
         Display.setFont(Arial_8);
@@ -136,7 +182,7 @@ public:
     }
     void printStatus(String string){//-90deg to 90deg
         Display.setFont(Arial_8);
-        Display.fillRect(10, 220, 100, 10, ILI9341_BLACK);
+        Display.fillRect(10, 220, 150, 10, ILI9341_BLACK);
         Display.setCursor(10, 220);
         Display.print(string);
     }
@@ -176,6 +222,9 @@ public:
         Display.setTextColor(C_CYAN, ILI9341_BLACK);
     }
     
+    /*
+        Print motor command velocities,  
+    */
     void printVel(int *vel, int x, int y, uint16_t color = ILI9341_WHITE){//-90deg to 90deg
         Display.setFont(Arial_8);
         
@@ -193,7 +242,59 @@ public:
         Display.setTextColor(C_CYAN, ILI9341_BLACK);
     }
 
+    void displayVel(int *vel){//-90deg to 90deg
+        Display.fillRect(vel_rect_corner.x,                       vel_rect_corner.y, 
+                                vel_rect_width, vel_rect_height, ILI9341_BLACK);
+        Display.fillRect(vel_rect_corner.x + vel_rect_width + 10, vel_rect_corner.y, 
+                                        vel_rect_width, vel_rect_height, ILI9341_BLACK);
+        Display.fillRect(vel_rect_corner.x,                       vel_rect_corner.y + vel_rect_height + 10, 
+                                        vel_rect_width, vel_rect_height, ILI9341_BLACK);
+        Display.fillRect(vel_rect_corner.x + vel_rect_width + 10, vel_rect_corner.y + vel_rect_height + 10, 
+                                        vel_rect_width, vel_rect_height, ILI9341_BLACK);
 
+        float max_vel = 200.0;
+        Display.fillRect(vel_rect_corner.x,                       vel_rect_corner.y, 
+                                        int((vel[1]-1000)/max_vel*vel_rect_width), vel_rect_height, ILI9341_ORANGE);
+        Display.fillRect(vel_rect_corner.x + vel_rect_width + 10, vel_rect_corner.y, 
+                                        int((vel[3]-1000)/max_vel*vel_rect_width), vel_rect_height, ILI9341_ORANGE);
+        Display.fillRect(vel_rect_corner.x,                       vel_rect_corner.y + vel_rect_height + 10, 
+                                        int((vel[0]-1000)/max_vel*vel_rect_width), vel_rect_height, ILI9341_ORANGE);
+        Display.fillRect(vel_rect_corner.x + vel_rect_width + 10, vel_rect_corner.y + vel_rect_height + 10, 
+                                        int((vel[2]-1000)/max_vel*vel_rect_width), vel_rect_height, ILI9341_ORANGE);
+    }
+
+    void draw_euler_deg(float x, float y, float z){//-90deg to 90deg
+    
+        static float old_x = 0, old_y =0, old_z = 0;
+        static int size = 3, r =30;
+        x = int(rp_center.x - x*180.0/3.14);
+        y = int(rp_center.y - y*180.0/3.14);
+        if(x <= rp_center.x-rp_size/2) x = rp_center.x-rp_size/2;
+        if(y <= rp_center.y-rp_size/2) y = rp_center.y-rp_size/2;
+        
+        if(x >= rp_center.x+rp_size/2) x = rp_center.x+rp_size/2-size;
+        if(y >= rp_center.y+rp_size/2) y = rp_center.y+rp_size/2-size;
+        
+        Display.drawCircle(old_x, old_y, size, ILI9341_BLACK);
+        Display.drawCircle(x,y,size,ILI9341_GREEN);
+        
+        Display.drawLine(y_center.x, y_center.y, y_center.x+r*sin(old_z), y_center.y-r*cos(old_z), ILI9341_BLACK);
+        Display.drawLine(y_center.x, y_center.y, y_center.x+r*sin(-z), y_center.y-r*cos(-z), ILI9341_GREEN);
+
+        old_x = x;
+        old_y = y;
+        old_z = -z;
+        // Display.drawLine
+    }
+
+    /*
+     * Needle in Ball Display Functions
+     * - drawNeedle: 
+     * - draw_acc_mag_in_ball: 
+     * 
+     * cube_center is the center position on display.
+     * 
+     */
 
     void drawNeedle(Vector3f vect, uint16_t color){
         static float s_w, d = 300.0;
@@ -238,51 +339,38 @@ public:
         old_acc_vect2 = acc_vect;
         old_mag_vect2 = mag_vect;
     }
-   
 
-    void draw_euler_deg(float x, float y, float z){//-90deg to 90deg
-    
-        static float old_x = 0, old_y =0, old_z = 0;
-        static int size = 3, r =30;
-        x = int(rp_center.x - x*180.0/3.14);
-        y = int(rp_center.y - y*180.0/3.14);
-        if(x <= rp_center.x-rp_size/2) x = rp_center.x-rp_size/2;
-        if(y <= rp_center.y-rp_size/2) y = rp_center.y-rp_size/2;
-        
-        if(x >= rp_center.x+rp_size/2) x = rp_center.x+rp_size/2-size;
-        if(y >= rp_center.y+rp_size/2) y = rp_center.y+rp_size/2-size;
-        
-        Display.drawCircle(old_x, old_y, size, ILI9341_BLACK);
-        Display.drawCircle(x,y,size,ILI9341_GREEN);
-        
-        Display.drawLine(y_center.x, y_center.y, y_center.x+r*sin(old_z), y_center.y-r*cos(old_z), ILI9341_BLACK);
-        Display.drawLine(y_center.x, y_center.y, y_center.x+r*sin(-z), y_center.y-r*cos(-z), ILI9341_GREEN);
-
-        old_x = x;
-        old_y = y;
-        old_z = -z;
-        // Display.drawLine
-    }
-
+    /*
+     * Draw Cube Functions
+     * - drawEdge: used to draw one edge of the cube
+     * - drawCube(Matrix3f): draws cube
+     * 
+     * init_cube() must be called during setup
+     * Vector2f cube_center is the center position on display.
+     * 
+     */
     void drawEdge(Vector3f v, Vector3f w, uint16_t color){
-        static float s_v, s_w, d = 300.0;
+        static float s_v, s_w, d = 350.0;
         s_v = 275.0/(d+v.z);
         s_w = 275.0/(d+w.z);
-        //mirroring y to follow right hand rule NOPE DONT
+        //mirroring y to follow right hand rule - NOPE DONT
         Display.drawLine(cube_center.x+(int)v.x*s_v, cube_center.y+(int)v.y*s_v, cube_center.x+(int)w.x*s_w, cube_center.y+(int)w.y*s_w, color);
     }
+
     void drawCube(float roll, float pitch, float yaw){//-90deg to 90deg  
         static Matrix3f rotation;
         rotation.from_euler(roll, pitch, yaw);
         // rotation.rotate
         drawCube(rotation.transposed()); 
     }
+
     void drawCube(Quaternion q){//-90deg to 90deg
         static Matrix3f rotation;
         q.rotation_matrix(rotation);
         // rotation.rotate
         drawCube(rotation.transposed()); 
     }
+
     void drawCube(Matrix3f DCM){//-90deg to 90deg
         static Vector3f center;
         
@@ -329,4 +417,7 @@ public:
             drawEdge(center, rot_face_center[i], ILI9341_DARKGREY);
     }
 
+    void update_estimator_display(){
+        
+    }
 };
