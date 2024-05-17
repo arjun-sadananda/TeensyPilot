@@ -64,11 +64,11 @@ public:
         P[2+2*6] = 1.0e-16;
         
         Qw = 1.0e1;
-        Qa = 0.0;
-        Qm = 0.0;
+        Qa = 1.0e-2;
+        Qm = 1.0e-2;
         Rw = 1.0e-3; // Gyro Measure Noise
-        Ra = 1.0e-3;
-        Rm = 1.0e-3; // 10.0e-3 vs 1.0e-3
+        Ra = 1.0e-2;
+        Rm = 1.0e-2; // 10.0e-3 vs 1.0e-3
     }
 
     Quaternion get_q(){

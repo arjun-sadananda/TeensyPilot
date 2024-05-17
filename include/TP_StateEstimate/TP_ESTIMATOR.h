@@ -80,7 +80,7 @@ public:
     void init_sensors(){
         Wire.begin();
         Wire.setClock(400000);
-        delay(250);
+        delay(1000);
     
 #if SENSORS == MPU_QMC
         mpu.mpu_setup();
@@ -89,15 +89,28 @@ public:
         m_ref.set(mag.m_ref.x, mag.m_ref.y, mag.m_ref.z);
 #elif SENSORS == LSM9D
         lsm9ds1.sensors_setup();
+        delay(2000); 
         lsm9ds1.calibrate_gyro();
         lsm9ds1.set_a_ref();
         a_ref.set(lsm9ds1.a_ref.x, lsm9ds1.a_ref.y, lsm9ds1.a_ref.z);
         lsm9ds1.set_m_ref();
         m_ref.set(lsm9ds1.m_ref.x, lsm9ds1.m_ref.y, lsm9ds1.m_ref.z);
 #endif
-        delay(250); 
+        delay(1000); 
     }
 
+    void calibrate_sensors(){
+#if SENSORS == MPU_QMC
+        a_ref.set(mpu.a_ref.x, mpu.a_ref.y, mpu.a_ref.z);
+        m_ref.set(mag.m_ref.x, mag.m_ref.y, mag.m_ref.z);
+#elif SENSORS == LSM9D
+        lsm9ds1.calibrate_gyro();
+        lsm9ds1.set_a_ref();
+        a_ref.set(lsm9ds1.a_ref.x, lsm9ds1.a_ref.y, lsm9ds1.a_ref.z);
+        lsm9ds1.set_m_ref();
+        m_ref.set(lsm9ds1.m_ref.x, lsm9ds1.m_ref.y, lsm9ds1.m_ref.z);
+#endif
+    }
     /*
         Initialise Estimators
 

@@ -29,6 +29,7 @@ uint32_t start_time, control_start_time;
 uint32_t read_time, estimate_time, display_time;//, control_time;
 
 bool ready = false;
+bool controller_on = false;
 const int throw_delay = 200;
 
 TP_ESTIMATOR tp_estimator;
@@ -78,10 +79,16 @@ int main(void)
     }
 #endif
 
-    debugln("Sensor & Estimator Initialising");
-    displayStatus("Sensor & Estimator Initialising");
-
+    debugln("Sensor Initialising");
+    displayStatus("Sensor Initialising");
     tp_estimator.init_sensors();
+    debugln("Sensor Calibration");
+    displayStatus("Sensor Calibration");
+    delay(2000);
+    displayStatus("Recording...");
+    tp_estimator.calibrate_sensors();
+    debugln("Estimator Initialising");
+    displayStatus("Estimator Initialising");
     tp_estimator.init_estimator();
 
     displayStatus("ESC Initialising");
@@ -92,7 +99,7 @@ int main(void)
 
     tp_control.stop_motors();
 
-    control_start_time = micros();
+    // control_start_time = micros();
 
     displayStatus("Main Loop Running");
 
@@ -120,23 +127,29 @@ int main(void)
         /*
          * Controller Switch: Throw Trigger
          */
-        if (digitalRead(8) == LOW)  // Button Pressed
+        if (digitalRead(8) == LOW){  // Button Pressed
             ready = true;
+            controller_on = false;
+        }
         if (ready == true && digitalRead(8) == HIGH){   // Button Released
             ready = false;
             displayStatus("Controller Running");
-            delay(throw_delay);
+            if (!controller_on)
+                delay(throw_delay);
             control_start_time = micros();
+            tp_control.clear_integral();
+            controller_on = true;
         }
 
         
         
         // M2 = euler_attitude_control( R, tp_estimator.omega);
         
-        if(int((micros() - control_start_time)/1000000.0) < 5 && ready == false){ // Button Not Pressed
+        if(int((micros() - control_start_time)/1000000.0) < 6 && controller_on == true){ // Button Not Pressed
             tp_control.throw_mode_controller(tp_estimator.q, tp_estimator.omega, true);
         }
         else{
+            controller_on = false;
             tp_control.throw_mode_controller(tp_estimator.q, tp_estimator.omega, false);
             tp_control.stop_motors();
             // displayStatus("Controller Stopped");
@@ -220,11 +233,12 @@ int main(void)
             /*
              * Display control related values
              */
-            tp_display.printVector(tp_control.M, 110, 80, ILI9341_ORANGE);
+            // tp_display.printVector(tp_control.M, 110, 80, ILI9341_ORANGE);
             // tp_display.printVector(M2, 140, 80, ILI9341_ORANGE);
-            tp_display.printStatus(tp_control.f*100, 110, 60);
+            // tp_display.printStatus(tp_control.f*100, 110, 60);
+            tp_display.displayfM(tp_control.f, tp_control.M, tp_control.get_f_cap());
             // tp_display.printVel(tp_control.v, 110, 150, ILI9341_ORANGE);
-            tp_display.displayVel(tp_control.v);
+            tp_display.displayVel(tp_control.v, tp_control.get_max_vel());
 
             /*
              * Display time for different processes

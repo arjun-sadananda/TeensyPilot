@@ -58,9 +58,10 @@ private:
     Vector3f face_center[3], rot_face_center[3];
     Vector3f rot_vert[8];
     Vector2f cube_center, rp_center, y_center;
-    Vector2f vel_rect_corner;
-    int vel_rect_width = 100;
-    int vel_rect_height = 10;
+    Vector2f vel_rect_corner, M_rect_corner;
+    int vel_rect_width;
+    int vel_rect_height;
+    int M_rect_size;
     int rp_size;
 
     Vector2f ball_center;
@@ -158,9 +159,21 @@ public:
         init_cube();
 
         vel_rect_corner.x = 20;
-        vel_rect_corner.y = 150;
+        vel_rect_corner.y = 180;
         vel_rect_width = 60;
         vel_rect_height = 8;
+
+        M_rect_corner.x = 50;
+        M_rect_corner.y = 70;
+        M_rect_size = 80;
+
+
+        Display.drawRect(M_rect_corner.x-1, M_rect_corner.y-1, 
+                                M_rect_size+2, M_rect_size+2, ILI9341_WHITE);
+        Display.drawRect(M_rect_corner.x-1-30, M_rect_corner.y-1, 
+                                12, M_rect_size+2, ILI9341_WHITE);
+        Display.drawRect(M_rect_corner.x-1, M_rect_corner.y-1+M_rect_size+5, 
+                                M_rect_size+2, 12, ILI9341_WHITE);
 
         Display.drawRect(vel_rect_corner.x-1,                       vel_rect_corner.y-1, 
                                         vel_rect_width+2, vel_rect_height+2, ILI9341_WHITE);
@@ -170,6 +183,7 @@ public:
                                         vel_rect_width+2, vel_rect_height+2, ILI9341_WHITE);
         Display.drawRect(vel_rect_corner.x-1 + vel_rect_width + 10, vel_rect_corner.y-1 + vel_rect_height + 10, 
                                         vel_rect_width+2, vel_rect_height+2, ILI9341_WHITE);
+
     }
 
     void printTime(int t){//-90deg to 90deg
@@ -242,9 +256,9 @@ public:
         Display.setTextColor(C_CYAN, ILI9341_BLACK);
     }
 
-    void displayVel(int *vel){//-90deg to 90deg
+    void displayVel(int *vel, float max_vel){//-90deg to 90deg
         Display.fillRect(vel_rect_corner.x,                       vel_rect_corner.y, 
-                                vel_rect_width, vel_rect_height, ILI9341_BLACK);
+                                        vel_rect_width, vel_rect_height, ILI9341_BLACK);
         Display.fillRect(vel_rect_corner.x + vel_rect_width + 10, vel_rect_corner.y, 
                                         vel_rect_width, vel_rect_height, ILI9341_BLACK);
         Display.fillRect(vel_rect_corner.x,                       vel_rect_corner.y + vel_rect_height + 10, 
@@ -252,7 +266,6 @@ public:
         Display.fillRect(vel_rect_corner.x + vel_rect_width + 10, vel_rect_corner.y + vel_rect_height + 10, 
                                         vel_rect_width, vel_rect_height, ILI9341_BLACK);
 
-        float max_vel = 200.0;
         Display.fillRect(vel_rect_corner.x,                       vel_rect_corner.y, 
                                         int((vel[1]-1000)/max_vel*vel_rect_width), vel_rect_height, ILI9341_ORANGE);
         Display.fillRect(vel_rect_corner.x + vel_rect_width + 10, vel_rect_corner.y, 
@@ -263,6 +276,29 @@ public:
                                         int((vel[2]-1000)/max_vel*vel_rect_width), vel_rect_height, ILI9341_ORANGE);
     }
 
+    void displayfM(float f, Vector3f M, float f_cap){
+        Vector3f M_disp;
+        static float old_x = 0, old_y =0, old_z = 0, old_f = 0;
+        static int size = 3, rect_space = -30;
+        M_disp = M * (M_rect_size/2-size);
+
+        Display.fillCircle(old_x, old_y, size, ILI9341_BLACK);
+        Display.fillCircle(M_rect_corner.x+M_rect_size/2+M_disp.x, M_rect_corner.y+M_rect_size/2+M_disp.y, size, ILI9341_GREEN);
+
+        Display.fillCircle(old_z, M_rect_corner.y+M_rect_size+10, size, ILI9341_BLACK);
+        Display.fillCircle(M_rect_corner.x+M_rect_size/2+M_disp.z, M_rect_corner.y+M_rect_size+10, size, ILI9341_GREEN);
+
+        old_x = M_rect_corner.x+M_rect_size/2+M_disp.x;
+        old_y = M_rect_corner.y+M_rect_size/2+M_disp.y;
+        old_z = M_rect_corner.x+M_rect_size/2+M_disp.z;
+
+        
+        Display.fillRect(M_rect_corner.x+rect_space,  M_rect_corner.y+M_rect_size*(1-old_f/f_cap), 
+                                        10, M_rect_size*old_f/f_cap, ILI9341_BLACK);
+        Display.fillRect(M_rect_corner.x+rect_space,  M_rect_corner.y+M_rect_size*(1-f/f_cap), 
+                                10, M_rect_size*f/f_cap, ILI9341_GREEN);
+        old_f = f;
+    }
     void draw_euler_deg(float x, float y, float z){//-90deg to 90deg
     
         static float old_x = 0, old_y =0, old_z = 0;

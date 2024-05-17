@@ -293,31 +293,33 @@ public:
     void calibrate_gyro(){
         GyroOffset.zero();
         Vector3f temp_sum; //since offsets are used in read sensor functions
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 3000; i++) {
             read_sensors();
             temp_sum += GyroRate;
             delayMicroseconds(100);
         }
-        GyroOffset = temp_sum/1000;
+        GyroOffset = temp_sum/3000;
     }
     void set_m_ref(){
         Vector3f sum;
-        for(int i = 0; i<1000; i++){
+        for(int i = 0; i<3000; i++){
             read_sensors();
             sum += UnitMagVect;
+            delayMicroseconds(100);
         }
-        m_ref = sum/=1000;
+        m_ref = sum/=3000;
         // m_ref.set(38290.3, 0, 20923.0); //NED
         m_ref.normalize();
     }    
     
     void set_a_ref(){
         Vector3f sum;
-        for(int i = 0; i<1000; i++){
+        for(int i = 0; i<3000; i++){
             read_sensors();
             sum += UnitAccVect;
+            delayMicroseconds(100);
         }
-        a_ref = sum/=1000;
+        a_ref = sum/=3000;
         // m_ref.set(38290.3, 0, 20923.0); //NED
         a_ref.normalize();
     }
