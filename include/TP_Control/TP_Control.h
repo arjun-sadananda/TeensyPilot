@@ -2,7 +2,7 @@
 // #include<vector3.h>
 // #include<AP_Math.h>
 
-#include "TP_Motors\TP_Motors.h"
+#include "TP_Motor\TP_Motor.h"
 
 #define MOTOR_ON true
 
@@ -138,6 +138,7 @@ public:
     }
     void init_motors(){
         ESC_setup();
+        stop_motors();
     }
     void throw_mode_controller(Quaternion q, Vector3f omega, bool motor_on){
         static Matrix3f R;

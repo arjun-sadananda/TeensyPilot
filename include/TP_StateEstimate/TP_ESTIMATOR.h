@@ -78,23 +78,34 @@ public:
     TP_MEKF2 tp_mekf2_acc;
 #endif
     void init_sensors(){
+#if SENSORS == MPU_QMC
         Wire.begin();
         Wire.setClock(400000);
         delay(1000);
-    
-#if SENSORS == MPU_QMC
         mpu.mpu_setup();
         mag.mag_setup();
         a_ref.set(mpu.a_ref.x, mpu.a_ref.y, mpu.a_ref.z);
         m_ref.set(mag.m_ref.x, mag.m_ref.y, mag.m_ref.z);
 #elif SENSORS == LSM9D
+    #if LSM9DS1_use_SPI
+        // CSAG: 38
+        // CSM:  37
+        // alternate MISO1: 39
+        pinMode (LSM_CSAG_pin, OUTPUT);
+        pinMode (LSM_CSM_pin, OUTPUT);
+        
+        digitalWrite(LSM_CSAG_pin, HIGH);
+        digitalWrite(LSM_CSM_pin, HIGH);
+        SPI1.setMISO(39);
+        // SPI1.setCS(38);
+        SPI1.begin();
+        // SPI.begin();
+    #else
+        Wire.begin();
+        Wire.setClock(400000);
+        delay(1000);
+    #endif
         lsm9ds1.sensors_setup();
-        delay(2000); 
-        lsm9ds1.calibrate_gyro();
-        lsm9ds1.set_a_ref();
-        a_ref.set(lsm9ds1.a_ref.x, lsm9ds1.a_ref.y, lsm9ds1.a_ref.z);
-        lsm9ds1.set_m_ref();
-        m_ref.set(lsm9ds1.m_ref.x, lsm9ds1.m_ref.y, lsm9ds1.m_ref.z);
 #endif
         delay(1000); 
     }
@@ -198,6 +209,7 @@ public:
 #endif
 #if ESTIMATOR == MEKF_acc || ESTIMATOR == ALL_ESTIMATORS
         tp_mekf.estimate_attitude(UnitAccVect, GyroRate, dt);
+        q = tp_mekf.get_q();
 #endif
 #if ESTIMATOR == MEKF_mag
         tp_mekf.estimate_attitude(UnitMagVect, GyroRate, dt);

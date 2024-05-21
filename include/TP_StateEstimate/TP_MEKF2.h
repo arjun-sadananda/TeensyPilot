@@ -9,7 +9,7 @@
 
 
 
-#define GYRO_ONLY true
+#define GYRO_ONLY false
 
 // Thanks to: https://github.com/PBernalPolo/test_MKF.git
 
@@ -64,8 +64,8 @@ public:
         P[2+2*6] = 1.0e-16;
         
         Qw = 1.0e1;
-        Qa = 1.0e-2;
-        Qm = 1.0e-2;
+        Qa = 1.0e-3;
+        Qm = 1.0e-3;
         Rw = 1.0e-3; // Gyro Measure Noise
         Ra = 1.0e-2;
         Rm = 1.0e-2; // 10.0e-3 vs 1.0e-3
@@ -288,7 +288,11 @@ public:
         * the updated point in the chart is mapped to a quaternion
         */
         fC2M( dx , q_del );  // now delta is stored in q_del
+#if GYRO_ONLY
+        q = q_p;
+#else
         q = q_p * q_del;
+#endif
         q.normalize();
         // and the angular velocity is updated in the usual way
         w[0] += dx[3];

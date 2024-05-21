@@ -25,7 +25,6 @@
 
 #include <string.h>
 
-
 /*
  * Display Modes
 */
@@ -70,6 +69,12 @@ private:
 
 protected:
 public:
+/*!
+ * @brief This function
+ * @param
+ * @return
+ * 
+ */
     void display_setup(const int DISPLAY_MODE){
         
         C_DKBLUE = Display.color565(0, 0, 40);

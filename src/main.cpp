@@ -6,6 +6,9 @@
 #include "TP_StateEstimate\TP_ESTIMATOR.h"
 #include "TP_Control\TP_Control.h"
 #include "SD.h"
+
+#include "TP_RC.h"
+
 // #define DEBUG_MODE true
 // #define DEBUG_AHRS true
 // #define DEBUG_ALT_EST true
@@ -13,15 +16,15 @@
 // #define MOTORS_ON false
 
 #define display_type  DRONE_MONITOR
-#define serial_type SERIAL_OFF
+#define serial_type SERIAL_DEBUG
 
-#define SD_LOG_ON false
+#define SD_LOG_ON true
 
 #if serial_type == SERIAL_DEBUG
     #define debug(x) Serial.print(x); Serial.print(" ");
     #define debugln(x) Serial.println(x)
 #else
-    #define debug(x) 
+    #define debug(x)
     #define debugln(x)
 #endif
 
@@ -62,6 +65,8 @@ int main(void)
     tp_display.display_setup(display_type);
 #endif
 
+    tp_rc.init();
+
 #if SD_LOG_ON
     if(!SD.begin(BUILTIN_SDCARD)){
         displayStatus("SD intialisation failed!");
@@ -84,23 +89,22 @@ int main(void)
     tp_estimator.init_sensors();
     debugln("Sensor Calibration");
     displayStatus("Sensor Calibration");
-    delay(2000);
+    delay(1000);
     displayStatus("Recording...");
     tp_estimator.calibrate_sensors();
+
     debugln("Estimator Initialising");
     displayStatus("Estimator Initialising");
     tp_estimator.init_estimator();
 
+    debugln("ESC Initialising");
     displayStatus("ESC Initialising");
-
     tp_control.init_motors();
 
     // tp_control.motor_test();
 
-    tp_control.stop_motors();
-
     // control_start_time = micros();
-
+    debugln("Main Loop Running");
     displayStatus("Main Loop Running");
 
 
@@ -125,6 +129,11 @@ int main(void)
         estimate_time = micros() - start_time - read_time;
 
         /*
+         * Update RC Commands
+         */
+        tp_rc.update();
+
+        /*
          * Controller Switch: Throw Trigger
          */
         if (digitalRead(8) == LOW){  // Button Pressed
@@ -142,7 +151,6 @@ int main(void)
         }
 
         
-        
         // M2 = euler_attitude_control( R, tp_estimator.omega);
         
         if(int((micros() - control_start_time)/1000000.0) < 6 && controller_on == true){ // Button Not Pressed
@@ -159,28 +167,28 @@ int main(void)
 #if SD_LOG_ON
         static int sd_log_count = 0;
         static String data;
-        if(sd_log_count < 110 && myFile){
-            data = String(start_time);
-                        // + "," + String(tp_estimator.GyroRate.x, 6) 
-                        // + "," + String(tp_estimator.GyroRate.y, 6) 
-                        // + "," + String(tp_estimator.GyroRate.z, 6)
-                        // + "," + String(tp_estimator.UnitAccVect.x, 6) 
-                        // + "," + String(tp_estimator.UnitAccVect.y, 6) 
-                        // + "," + String(tp_estimator.UnitAccVect.z, 6)
-                        // + "," + String(tp_estimator.UnitMagVect.x, 6) 
-                        // + "," + String(tp_estimator.UnitMagVect.y, 6) 
-                        // + "," + String(tp_estimator.UnitMagVect.z, 6);
-            for(int i =0; i<36; i++)
-                    data.append("," + String(tp_estimator.tp_mekf2.P[i] , 6));
-            for(int i = 0; i<6; i++)
-                for(int j =0; j<9; j++)
-                    data.append("," + String(tp_estimator.tp_mekf2.K[i*9+j], 6));
+        if(sd_log_count < 500 && myFile){
+            data = String(start_time)
+                        + "," + String(tp_estimator.GyroRate.x, 6) 
+                        + "," + String(tp_estimator.GyroRate.y, 6) 
+                        + "," + String(tp_estimator.GyroRate.z, 6)
+                        + "," + String(tp_estimator.UnitAccVect.x, 6) 
+                        + "," + String(tp_estimator.UnitAccVect.y, 6) 
+                        + "," + String(tp_estimator.UnitAccVect.z, 6)
+                        + "," + String(tp_estimator.UnitMagVect.x, 6) 
+                        + "," + String(tp_estimator.UnitMagVect.y, 6) 
+                        + "," + String(tp_estimator.UnitMagVect.z, 6);
+            // for(int i =0; i<36; i++)
+            //         data.append("," + String(tp_estimator.tp_mekf2.P[i] , 6));
+            // for(int i = 0; i<6; i++)
+            //     for(int j =0; j<9; j++)
+            //         data.append("," + String(tp_estimator.tp_mekf2.K[i*9+j], 6));
 
-            for(int i =0; i<36; i++)
-                    data.append("," + String(tp_estimator.tp_mekf2_acc.P[i] , 6));
-            for(int i = 0; i<6; i++)
-                for(int j =0; j<9; j++)
-                    data.append("," + String(tp_estimator.tp_mekf2_acc.K[i*9+j], 6));
+            // for(int i =0; i<36; i++)
+            //         data.append("," + String(tp_estimator.tp_mekf2_acc.P[i] , 6));
+            // for(int i = 0; i<6; i++)
+            //     for(int j =0; j<9; j++)
+            //         data.append("," + String(tp_estimator.tp_mekf2_acc.K[i*9+j], 6));
 
             for(int i =0; i<36; i++)
                     data.append("," + String(tp_estimator.tp_mekf2_triad.P[i] , 6));
@@ -191,7 +199,7 @@ int main(void)
             myFile.println(data);
             sd_log_count ++;
         }
-        if(sd_log_count == 110){
+        if(sd_log_count == 500){
             myFile.close();
             tp_display.printStatus("Done Logging");
             sd_log_count ++;
@@ -203,7 +211,7 @@ int main(void)
 #if display_type != DISPLAY_OFF
         static int display_skip_count = 0;
         if(display_skip_count > 50){
-
+            // tp_rc.update();
     #if display_type   == BKF_DISPLAY
         #if ESTIMATOR == BKF
             tp_display.draw_euler_deg(tp_estimator.tp_bkf.attitude_euler.x, tp_estimator.tp_bkf.attitude_euler.y, tp_estimator.tp_bkf.attitude_euler.z);
@@ -222,8 +230,19 @@ int main(void)
             tp_display.draw_acc_mag_in_ball2(tp_estimator.q.inverse().ret_earth_to_body(tp_estimator.a_ref),
                                             tp_estimator.q.inverse().ret_earth_to_body(tp_estimator.m_ref));
             tp_display.drawCube(tp_estimator.q);
-            // tp_display.printVector(tp_estimator.UnitAccVect, 10, 80);
-            // tp_display.printVector(tp_estimator.UnitMagVect, 10, 150);
+
+            tp_display.printVector(tp_estimator.UnitAccVect, 150, 70);
+            tp_display.printVector(tp_estimator.UnitMagVect, 150, 110);
+
+            digitalWrite(LSM_CSAG_pin, LOW);
+            SPI1.transfer(0x0F | 0x80);// | 0x40);//| 0x40 LIS3MDL_REG_OUT_X_L WHO_AM_I: 104 = 01101000
+            tp_display.printStatus(SPI1.transfer(0), 100);
+            digitalWrite(LSM_CSAG_pin, HIGH);
+            
+            digitalWrite(LSM_CSM_pin, LOW);
+            SPI1.transfer(LIS3MDL_REG_WHO_AM_I | 0x80);// | 0x40);//| 0x40 LIS3MDL_REG_OUT_X_L WHO_AM_I: 104 = 01101000 = 61
+            tp_display.printStatus(SPI1.transfer(0), 130);
+            digitalWrite(LSM_CSM_pin, HIGH);
 
             // tp_display.printStatus(tp_estimator.tp_mekf2.get_a_res_norm()*10000);
             // tp_display.printStatus(tp_estimator.tp_mekf2.get_m_res_norm()*10000, 150);
@@ -238,7 +257,14 @@ int main(void)
             // tp_display.printStatus(tp_control.f*100, 110, 60);
             tp_display.displayfM(tp_control.f, tp_control.M, tp_control.get_f_cap());
             // tp_display.printVel(tp_control.v, 110, 150, ILI9341_ORANGE);
-            tp_display.displayVel(tp_control.v, tp_control.get_max_vel());
+            // tp_display.displayVel(tp_control.v, tp_control.get_max_vel());
+            static int rc_comm[4];
+            rc_comm[0] = tp_rc.rc_command.roll;
+            rc_comm[1] = tp_rc.rc_command.pitch;
+            rc_comm[2] = tp_rc.rc_command.yaw;
+            rc_comm[3] = tp_rc.rc_command.thrust;
+
+            tp_display.displayVel(rc_comm, 1000);
 
             /*
              * Display time for different processes
@@ -286,8 +312,15 @@ int main(void)
             serial_skip_count = 0;
         }
         serial_skip_count++;
+    debug(tp_estimator.q.q1);
+    debug(tp_estimator.q.q2);
+    debug(tp_estimator.q.q3);
+    debugln(tp_estimator.q.q4);
 #endif
 	}
         
 	return 0;
 }
+
+
+
