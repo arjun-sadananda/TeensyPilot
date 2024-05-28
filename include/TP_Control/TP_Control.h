@@ -4,7 +4,7 @@
 
 #include "TP_Motor\TP_Motor.h"
 
-#define MOTOR_ON true
+#define MOTOR_ON false
 
 class TP_Control : protected TP_MOTOR{
 public:
@@ -137,8 +137,10 @@ public:
         e_R_I.zero();
     }
     void init_motors(){
+#if MOTOR_ON
         ESC_setup();
         stop_motors();
+#endif
     }
     void throw_mode_controller(Quaternion q, Vector3f omega, bool motor_on){
         static Matrix3f R;
@@ -154,14 +156,18 @@ public:
 #endif
     }
     void stop_motors(){
+#if MOTOR_ON
         set_motor_speeds(1000, 1000, 1000, 1000);
+#endif
     }
     void motor_test(){
+#if MOTOR_ON
         for(int i = 0; i<=300; i+=20){
             set_motor_speeds(1000+i, 1000+i, 1000+i, 1000+i);
             delay(3000);
         }
         stop_motors();
         delay(5000);
+#endif
     }
 };

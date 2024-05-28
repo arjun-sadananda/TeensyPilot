@@ -20,8 +20,8 @@
 #include "vector3.h"
 #include "matrix3.h"
 
-#define PIN_CS 10
-#define PIN_DC 9   //9, 15
+#define PIN_CS 9
+#define PIN_DC 10   //9, 15
 
 #include <string.h>
 
@@ -46,7 +46,7 @@ class TP_Display{
 
 private:
 
-    const Rotation NED_TO_DISPLAY = ROTATION_YAW_90;   //ROTATION_YAW_90 <- for 1 ; ROTATION_YAW_270 -> for 3 <-set Rotation
+    const Rotation NED_TO_DISPLAY = ROTATION_YAW_270;   //ROTATION_YAW_90 <- for 1 ; ROTATION_YAW_270 -> for 3 <-set Rotation
 
     uint16_t C_DKBLUE = 0;
     uint16_t C_CYAN = 0;
@@ -81,7 +81,7 @@ public:
         C_CYAN = Display.color565(0, 255, 255);
 
         Display.begin();
-        Display.setRotation(1);
+        Display.setRotation(3);
         Display.fillScreen(ILI9341_BLACK);
 
         Display.setFont(Arial_10);

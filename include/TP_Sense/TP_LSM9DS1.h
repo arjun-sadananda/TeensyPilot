@@ -9,8 +9,8 @@
 // #include <TP_Sense/Adafruit_Unified_Sensor/Adafruit_Sensor.h>  // not used in this demo but required!
 
 
-#define LSM_CSAG_pin 38
-#define LSM_CSM_pin  37
+#define LSM_CSAG_pin 25
+#define LSM_CSM_pin  24
 
 #define LSM9DS1_use_SPI true
 

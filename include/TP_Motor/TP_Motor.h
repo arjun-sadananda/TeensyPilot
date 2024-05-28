@@ -8,10 +8,10 @@
 // FlexPWM4.0	22
 // FlexPWM4.1	23	4.482 kHz
 // FlexPWM4.2	2, 3
-#define ESCPIN1 2
-#define ESCPIN2 3
-#define ESCPIN3 4
-#define ESCPIN4 5
+#define ESCPIN1 23
+#define ESCPIN2 22
+#define ESCPIN3 37
+#define ESCPIN4 36
 
 
 #define ESC_CALIB false

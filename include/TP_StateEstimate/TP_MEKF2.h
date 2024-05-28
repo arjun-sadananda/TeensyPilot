@@ -64,8 +64,8 @@ public:
         P[2+2*6] = 1.0e-16;
         
         Qw = 1.0e1;
-        Qa = 1.0e-3;
-        Qm = 1.0e-3;
+        Qa = 0;//1.0e-3;//0
+        Qm = 0;//1.0e-3;//0
         Rw = 1.0e-3; // Gyro Measure Noise
         Ra = 1.0e-2;
         Rm = 1.0e-2; // 10.0e-3 vs 1.0e-3
