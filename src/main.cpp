@@ -16,7 +16,7 @@
 // #define MOTORS_ON false
 
 #define display_type  DRONE_MONITOR
-#define serial_type SERIAL_DEBUG
+#define serial_type SERIAL_OFF
 
 #define SD_LOG_ON true
 
@@ -31,9 +31,10 @@
 uint32_t start_time, control_start_time;
 uint32_t read_time, estimate_time, display_time;//, control_time;
 
-bool ready = false;
+// bool ready = false;
 bool controller_on = false;
-const int throw_delay = 200;
+// const int throw_delay = 200;
+bool prev_arm_status = false;
 
 TP_ESTIMATOR tp_estimator;
 TP_Control tp_control;
@@ -136,34 +137,65 @@ int main(void)
         /*
          * Controller Switch: Throw Trigger
          */
-        if (digitalRead(8) == LOW){  // Button Pressed
-            ready = true;
+        // if (digitalRead(8) == LOW){  // Button Pressed
+        //     ready = true;
+        //     controller_on = false;
+        // }
+        // if (ready == true && digitalRead(8) == HIGH){   // Button Released
+        //     ready = false;
+        //     displayStatus("Controller Running");
+        //     if (!controller_on)
+        //         delay(throw_delay);
+        //     control_start_time = micros();
+        //     tp_control.clear_integral();
+        //     controller_on = true;
+        // }
+        if (tp_rc.rc_command.arm == false)
+            controller_on = false;
+
+        if (prev_arm_status == true && tp_rc.rc_command.arm == false){
+            displayStatus("Disarmed");
+            prev_arm_status = false;
             controller_on = false;
         }
-        if (ready == true && digitalRead(8) == HIGH){   // Button Released
-            ready = false;
-            displayStatus("Controller Running");
-            if (!controller_on)
-                delay(throw_delay);
-            control_start_time = micros();
+        if (prev_arm_status == false && tp_rc.rc_command.arm == true){
+            displayStatus("Armed");
             tp_control.clear_integral();
+            prev_arm_status = true;
             controller_on = true;
         }
 
         
         // M2 = euler_attitude_control( R, tp_estimator.omega);
         
-        if(int((micros() - control_start_time)/1000000.0) < 6 && controller_on == true){ // Button Not Pressed
-            tp_control.throw_mode_controller(tp_estimator.q, tp_estimator.omega, true);
-        }
-        else{
-            controller_on = false;
-            tp_control.throw_mode_controller(tp_estimator.q, tp_estimator.omega, false);
-            tp_control.stop_motors();
-            // displayStatus("Controller Stopped");
-        }
+        // if(int((micros() - control_start_time)/1000000.0) < 6 && controller_on == true){ // Button Not Pressed
+        //     tp_control.throw_mode_controller(tp_estimator.q, tp_estimator.omega, true);
+        // }
+        // else{
+        //     controller_on = false;
+        //     tp_control.throw_mode_controller(tp_estimator.q, tp_estimator.omega, false);
+        //     tp_control.stop_motors();
+        //     // displayStatus("Controller Stopped");
+        // }
         // control_time = micros() - start_time - read_time - estimate_time;
 
+        const static float max_rp = .75, max_yaw = 1;
+        static float thrust, roll, pitch, yaw; 
+        thrust = (tp_rc.rc_command.throttle-1000)/500.0;
+        roll = -(tp_rc.rc_command.roll-1500)/500.0*max_rp;
+        pitch = (tp_rc.rc_command.pitch-1500)/500.0*max_rp;
+        yaw = (tp_rc.rc_command.yaw-1500)/500.0*max_yaw;
+
+        static Matrix3f Rd;
+        Rd.from_euler(roll, pitch, yaw);
+
+        if (controller_on){
+            tp_control.angle_mode_controller(tp_estimator.q, tp_estimator.omega, thrust, Rd, true);
+        }
+        else{
+            tp_control.angle_mode_controller(tp_estimator.q, tp_estimator.omega, thrust, Rd, false);
+            tp_control.stop_motors();
+        }
 #if SD_LOG_ON
         static int sd_log_count = 0;
         static String data;
@@ -234,15 +266,15 @@ int main(void)
             tp_display.printVector(tp_estimator.UnitAccVect, 150, 70);
             tp_display.printVector(tp_estimator.UnitMagVect, 150, 110);
 
-            digitalWrite(LSM_CSAG_pin, LOW);
-            SPI1.transfer(0x0F | 0x80);// | 0x40);//| 0x40 LIS3MDL_REG_OUT_X_L WHO_AM_I: 104 = 01101000
-            tp_display.printStatus(SPI1.transfer(0), 100);
-            digitalWrite(LSM_CSAG_pin, HIGH);
+            // digitalWrite(LSM_CSAG_pin, LOW);
+            // SPI1.transfer(0x0F | 0x80);// | 0x40);//| 0x40 LIS3MDL_REG_OUT_X_L WHO_AM_I: 104 = 01101000
+            // tp_display.printStatus(SPI1.transfer(0), 100);
+            // digitalWrite(LSM_CSAG_pin, HIGH);
             
-            digitalWrite(LSM_CSM_pin, LOW);
-            SPI1.transfer(LIS3MDL_REG_WHO_AM_I | 0x80);// | 0x40);//| 0x40 LIS3MDL_REG_OUT_X_L WHO_AM_I: 104 = 01101000 = 61
-            tp_display.printStatus(SPI1.transfer(0), 130);
-            digitalWrite(LSM_CSM_pin, HIGH);
+            // digitalWrite(LSM_CSM_pin, LOW);
+            // SPI1.transfer(LIS3MDL_REG_WHO_AM_I | 0x80);// | 0x40);//| 0x40 LIS3MDL_REG_OUT_X_L WHO_AM_I: 104 = 01101000 = 61
+            // tp_display.printStatus(SPI1.transfer(0), 130);
+            // digitalWrite(LSM_CSM_pin, HIGH);
 
             // tp_display.printStatus(tp_estimator.tp_mekf2.get_a_res_norm()*10000);
             // tp_display.printStatus(tp_estimator.tp_mekf2.get_m_res_norm()*10000, 150);
@@ -262,7 +294,7 @@ int main(void)
             rc_comm[0] = tp_rc.rc_command.roll;
             rc_comm[1] = tp_rc.rc_command.pitch;
             rc_comm[2] = tp_rc.rc_command.yaw;
-            rc_comm[3] = tp_rc.rc_command.thrust;
+            rc_comm[3] = tp_rc.rc_command.throttle;
 
             tp_display.displayVel(rc_comm, 1000);
 

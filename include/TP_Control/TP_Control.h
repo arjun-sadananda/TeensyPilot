@@ -4,7 +4,7 @@
 
 #include "TP_Motor\TP_Motor.h"
 
-#define MOTOR_ON false
+#define MOTOR_ON true
 
 class TP_Control : protected TP_MOTOR{
 public:
@@ -22,15 +22,17 @@ public:
     }
 private:
     Vector3f e_R, e_Omega, e_R_I;
-    const float k_R = 1, k_Omega = 0.11, k_I = 0.002;//.01;
+    const float k_R = .75, k_Omega = 0.05, k_I = 0.002;//.01;
 
     Matrix3f R_err;
 
     float vertical_rel_thrust = 1; // redundant
-    const float f_cap = 1.5, f_arm = 0.1; //arm_throttle = 1050;
-    int hover_throttle = 280; // arm_throttle = 1000 + hover_throttle * f_arm = 1020 
-    const int hover_offset_2 = 0, hover_offset_4 = 0; // -10  0
-    const int hover_offset_1 = 0, hover_offset_3 = 0; // -80 -70
+    const float f_cap = 3.0, f_arm = 0.1; //arm_throttle = 1050;
+    int hover_throttle = 300; // throttle when f=1; arm_throttle = 1000 + hover_throttle * f_arm = 1020 
+
+    // uint16_t half_throttle = 300;
+    const int hover_offset_2 = 130, hover_offset_4 = 150; // -10  0
+    const int hover_offset_1 = 0, hover_offset_3 = 20; // -80 -70
 
 
     Vector3f euler_attitude_control(const Matrix3f R, const Vector3f omega){
@@ -63,6 +65,32 @@ private:
         if (phi < .3)
             e_R_I += e_R;
         // if (e_R_I.length())
+        // ***
+        // To tackle magnetic disturbance affecting yaw...
+        // How about different k for 3 components???
+        M = -e_R*k_R -e_Omega*k_Omega - e_R_I*k_I;// + omega%(J*omega);
+
+        return M;
+    }
+
+    Vector3f SO3_attitude_control(const Matrix3f R, const Vector3f omega, const Matrix3f Rd){
+        static Vector3f M;
+        static Matrix3f J;
+        J.identity();
+
+        R_err = Rd.transposed()*R-R.transposed()*Rd;                  // This is skew symmetric
+        e_R.set(R_err.c.y/2, R_err.a.z/2, R_err.b.x/2);     // Can test omega control and angle control independently
+                                                            // e_R      \in (-1, 1)^3
+        e_Omega = omega;                                    // e_Omega  \in  rad/sec
+
+        // static float phi;
+        // phi = 3 - (R.a.x + R.b.y + R.c.z);
+        // if (phi < .3)
+        //     e_R_I += e_R;
+        // if (e_R_I.length()>300.0){
+        //     e_R_I.normalize();
+        //     e_R_I*=300.0;
+        // }
         // ***
         // To tackle magnetic disturbance affecting yaw...
         // How about different k for 3 components???
@@ -125,10 +153,15 @@ private:
 
         // f1 = f2 = f3 = f4 = 1; //For testing open loop speed control
 
-        v[0] = 1000 + f1 * (hover_throttle + hover_offset_1);
-        v[1] = 1000 + f2 * (hover_throttle + hover_offset_2);
-        v[2] = 1000 + f3 * (hover_throttle + hover_offset_3);
-        v[3] = 1000 + f4 * (hover_throttle + hover_offset_4);
+        v[0] = 1000 + f1 * (hover_throttle) + hover_offset_1;
+        v[1] = 1000 + f2 * (hover_throttle) + hover_offset_2;
+        v[2] = 1000 + f3 * (hover_throttle) + hover_offset_3;
+        v[3] = 1000 + f4 * (hover_throttle) + hover_offset_4;
+
+        // v[0] = 1000 + f1 * hover_throttle;
+        // v[1] = 1000 + f2 * hover_throttle;
+        // v[2] = 1000 + f3 * hover_throttle;
+        // v[3] = 1000 + f4 * hover_throttle;
     }
 
 public:
@@ -136,12 +169,28 @@ public:
     void clear_integral(){
         e_R_I.zero();
     }
+
     void init_motors(){
 #if MOTOR_ON
         ESC_setup();
         stop_motors();
 #endif
     }
+
+    void angle_mode_controller(const Quaternion q, const Vector3f omega, const float thrust, const Matrix3f Rd, bool motor_on){
+        static Matrix3f R;
+        // static const float m = 1, g=1; // 550gms
+        q.rotation_matrix(R);
+        // f = m*g*R.c.z;  // or 
+        f =  thrust *R.c.z; // relative-force = f/mg   ---  f = 1 is hover force
+        M = SO3_attitude_control( R, omega, Rd);
+        get_motor_commands();
+#if MOTOR_ON
+        if (motor_on)
+            set_motor_speeds(v[0], v[1], v[2], v[3]);
+#endif
+    }
+
     void throw_mode_controller(Quaternion q, Vector3f omega, bool motor_on){
         static Matrix3f R;
         // static const float m = 1, g=1; // 550gms
@@ -155,11 +204,13 @@ public:
             set_motor_speeds(v[0], v[1], v[2], v[3]);
 #endif
     }
+
     void stop_motors(){
 #if MOTOR_ON
         set_motor_speeds(1000, 1000, 1000, 1000);
 #endif
     }
+
     void motor_test(){
 #if MOTOR_ON
         for(int i = 0; i<=300; i+=20){

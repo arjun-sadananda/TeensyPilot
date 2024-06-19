@@ -46,7 +46,7 @@ class TP_Display{
 
 private:
 
-    const Rotation NED_TO_DISPLAY = ROTATION_YAW_270;   //ROTATION_YAW_90 <- for 1 ; ROTATION_YAW_270 -> for 3 <-set Rotation
+    const Rotation NED_TO_DISPLAY = ROTATION_YAW_90;   //ROTATION_YAW_90 <- for 1 ; ROTATION_YAW_270 -> for 3 <-set Rotation
 
     uint16_t C_DKBLUE = 0;
     uint16_t C_CYAN = 0;

@@ -66,7 +66,7 @@ public:
         Qw = 1.0e1;
         Qa = 0;//1.0e-3;//0
         Qm = 0;//1.0e-3;//0
-        Rw = 1.0e-3; // Gyro Measure Noise
+        Rw = 1.0e-2; // Gyro Measure Noise 1.0e-3
         Ra = 1.0e-2;
         Rm = 1.0e-2; // 10.0e-3 vs 1.0e-3
     }
@@ -96,7 +96,7 @@ public:
         chartUpdate = chartUpdateIn;
     }
     
-    void init_estimator(const Vector3f a_r, const Vector3f m_r, bool triad_on, double R_m = 1.0e-3){
+    void init_estimator(const Vector3f a_r, const Vector3f m_r, bool triad_on, double R_m = 1.0e-2){
         // Introduce Gyro Only Mode
         use_triad = triad_on;
         // R[0] = R[1] = R[2] = sq(mpu.std_dev_accel);

@@ -85,7 +85,7 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 clock = pygame.time.Clock()
 
-teensyPilot = serial.Serial(port='COM4',   baudrate=57600, timeout=.1)
+teensyPilot = serial.Serial(port='COM3',   baudrate=57600, timeout=.1)
 
 proj_points_1 = [
     [n, n] for n in range(len(points))

@@ -30,6 +30,7 @@
 #define MEKF2_COMPARE 8
 
 #define ESTIMATOR MEKF2_TRIAD
+// #define ESTIMATOR MEKF2_TRIAD
 
 #define MPU_QMC 0
 #define LSM9D 1 
@@ -152,17 +153,17 @@ public:
 #if ESTIMATOR == MEKF2 || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
         // mpu.calibrate_gyro();
         // mag.set_m_ref();
-        tp_mekf2.init_estimator(a_ref, m_ref, false, 1.0e-3);
+        tp_mekf2.init_estimator(a_ref, m_ref, false);
 #endif 
 #if ESTIMATOR == MEKF2_TRIAD || ESTIMATOR == ALL_ESTIMATORS || ESTIMATOR == MEKF2_COMPARE
         // mpu.calibrate_gyro();
         // mag.set_m_ref();
-        tp_mekf2_triad.init_estimator(a_ref, m_ref, true, 1.0e-3);
+        tp_mekf2_triad.init_estimator(a_ref, m_ref, true);
 #endif
 #if ESTIMATOR == MEKF2_COMPARE
         // mpu.calibrate_gyro();
         // mag.set_m_ref();
-        tp_mekf2_acc.init_estimator(a_ref, m_ref, false, 5.0e-3);
+        tp_mekf2_acc.init_estimator(a_ref, m_ref, false, 5.0e-2);
 #endif
     }
 
