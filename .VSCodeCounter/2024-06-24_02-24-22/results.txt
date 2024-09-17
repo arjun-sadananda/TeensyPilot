@@ -1,0 +1,47 @@
+Date : 2024-06-24 02:24:22
+Directory : c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include
+Total : 18 files,  3192 codes, 1159 comments, 791 blanks, all 5142 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| C++      |         18 |      3,192 |      1,159 |        791 |      5,142 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++--------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                             | files      | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                |         18 |      3,192 |      1,159 |        791 |      5,142 |
+| . (Files)                                                                                        |          4 |        505 |         65 |        112 |        682 |
+| TP_Control                                                                                       |          1 |        127 |         54 |         43 |        224 |
+| TP_Motor                                                                                         |          3 |      1,056 |        522 |        366 |      1,944 |
+| TP_Sense                                                                                         |          4 |        508 |        180 |         95 |        783 |
+| TP_StateEstimate                                                                                 |          6 |        996 |        338 |        175 |      1,509 |
++--------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++--------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                                         | language | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Control\TP_Control.h         | C++      |        127 |         54 |         43 |        224 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Display.h                    | C++      |        335 |         60 |         69 |        464 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Motor\DSHOT.h                | C++      |        221 |        138 |         82 |        441 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Motor\ESCCMD.h               | C++      |        785 |        313 |        255 |      1,353 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Motor\TP_Motor.h             | C++      |         50 |         71 |         29 |        150 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_RC.h                         | C++      |         55 |          5 |         13 |         73 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_SD.h                         | C++      |         15 |          0 |          4 |         19 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Sense\TP_BMP280.h            | C++      |         95 |          0 |          9 |        104 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Sense\TP_LSM9DS1.h           | C++      |        273 |        101 |         63 |        437 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Sense\TP_MPU6050.h           | C++      |         79 |         61 |         13 |        153 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Sense\TP_Mag5883.h           | C++      |         61 |         18 |         10 |         89 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_Serial.h                     | C++      |        100 |          0 |         26 |        126 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_StateEstimate\TP_BKF.h       | C++      |         39 |         23 |         13 |         75 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_StateEstimate\TP_EKF.h       | C++      |        193 |         58 |         50 |        301 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_StateEstimate\TP_ESTIMATOR.h | C++      |        182 |         33 |         17 |        232 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_StateEstimate\TP_MEKF.h      | C++      |        266 |        104 |         43 |        413 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_StateEstimate\TP_MEKF2.h     | C++      |        297 |        119 |         47 |        463 |
+| c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\include\TP_StateEstimate\TP_TRIAD.h     | C++      |         19 |          1 |          5 |         25 |
+| Total                                                                                            |          |      3,192 |      1,159 |        791 |      5,142 |
++--------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+

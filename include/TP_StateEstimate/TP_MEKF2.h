@@ -174,7 +174,7 @@ public:
         if( !w.is_zero() )
             q_del.from_angular_velocity(w,dt);
         else
-            q_del.initialise(); // No prediction just update!?
+            q_del.initialise();                 // No prediction just update!?
 
         q_p = q * q_del;
 
@@ -274,7 +274,8 @@ public:
         dy[6] = w_m[0]-w[0]; 
         dy[7] = w_m[1]-w[1];
         dy[8] = w_m[2]-w[2];
-        // x = 0 + K*(z-z)
+        // dy = measurements - predictions
+        // dx = K*(dy); 
         double dx[6];
         for(int i=0; i<6; i++){
             double sum = 0.0;

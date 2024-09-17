@@ -8,9 +8,10 @@
 
 class TP_Control : protected TP_MOTOR{
 public:
+    // static const float m = 1, g=1; // 550gms
     Vector3f M;
     float f;
-    int v[4];
+    float v[4];
     // DO NOT ignore Yaw, It causes problem in roll and pitch as well!!
     const bool ignore_yaw = false;
     
@@ -22,17 +23,17 @@ public:
     }
 private:
     Vector3f e_R, e_Omega, e_R_I;
-    const float k_R = .75, k_Omega = 0.05, k_I = 0.002;//.01;
+    const float k_R = .75, k_Omega = 0.1, k_I = 0.002;//.01;
 
     Matrix3f R_err;
 
     float vertical_rel_thrust = 1; // redundant
     const float f_cap = 3.0, f_arm = 0.1; //arm_throttle = 1050;
-    int hover_throttle = 300; // throttle when f=1; arm_throttle = 1000 + hover_throttle * f_arm = 1020 
+    float hover_throttle = 30.0; // throttle when f=1; arm_throttle = 1000 + hover_throttle * f_arm = 1020 
 
     // uint16_t half_throttle = 300;
-    const int hover_offset_2 = 130, hover_offset_4 = 150; // -10  0
-    const int hover_offset_1 = 0, hover_offset_3 = 20; // -80 -70
+    const float hover_offset_2 = 10, hover_offset_4 = 10; // -10  0
+    const float hover_offset_1 = 0, hover_offset_3 = 0; // -80 -70
 
 
     Vector3f euler_attitude_control(const Matrix3f R, const Vector3f omega){
@@ -55,7 +56,7 @@ private:
         static Matrix3f J;
         J.identity();
 
-        R_err = R-R.transposed();                  // This is skew symmetric
+        R_err = R-R.transposed();                           // This is skew symmetric
         e_R.set(R_err.c.y/2, R_err.a.z/2, R_err.b.x/2);     // Can test omega control and angle control independently
                                                             // e_R      \in (-1, 1)^3
         e_Omega = omega;                                    // e_Omega  \in  rad/sec
@@ -64,11 +65,11 @@ private:
         phi = 3 - (R.a.x + R.b.y + R.c.z);
         if (phi < .3)
             e_R_I += e_R;
+        M = -e_R*k_R -e_Omega*k_Omega - e_R_I*k_I;          // + omega%(J*omega);
         // if (e_R_I.length())
         // ***
         // To tackle magnetic disturbance affecting yaw...
         // How about different k for 3 components???
-        M = -e_R*k_R -e_Omega*k_Omega - e_R_I*k_I;// + omega%(J*omega);
 
         return M;
     }
@@ -123,7 +124,7 @@ private:
         // f3 = f + M.x + M.y - M.z*c_inv;
         // f4 = f + M.x - M.y + M.z*c_inv;
 
-        v[0] = v[1] = v[2] = v[3] = 1000;
+        v[0] = v[1] = v[2] = v[3] = 0;
 
         // This is not good
         // Maybe find max f
@@ -153,10 +154,10 @@ private:
 
         // f1 = f2 = f3 = f4 = 1; //For testing open loop speed control
 
-        v[0] = 1000 + f1 * (hover_throttle) + hover_offset_1;
-        v[1] = 1000 + f2 * (hover_throttle) + hover_offset_2;
-        v[2] = 1000 + f3 * (hover_throttle) + hover_offset_3;
-        v[3] = 1000 + f4 * (hover_throttle) + hover_offset_4;
+        v[0] = f1 * (hover_throttle) + hover_offset_1;
+        v[1] = f2 * (hover_throttle) + hover_offset_2;
+        v[2] = f3 * (hover_throttle) + hover_offset_3;
+        v[3] = f4 * (hover_throttle) + hover_offset_4;
 
         // v[0] = 1000 + f1 * hover_throttle;
         // v[1] = 1000 + f2 * hover_throttle;
@@ -177,12 +178,15 @@ public:
 #endif
     }
 
-    void angle_mode_controller(const Quaternion q, const Vector3f omega, const float thrust, const Matrix3f Rd, bool motor_on){
+    void angle_mode_controller( const Quaternion q, 
+                                const Vector3f omega, 
+                                const float thrust, 
+                                const Matrix3f Rd, 
+                                bool motor_on){
         static Matrix3f R;
-        // static const float m = 1, g=1; // 550gms
         q.rotation_matrix(R);
-        // f = m*g*R.c.z;  // or 
-        f =  thrust *R.c.z; // relative-force = f/mg   ---  f = 1 is hover force
+        f =  thrust *R.c.z;                             // relative-force = f/mg   ---  f = 1 is hover force         // f = m*g*R.c.z;  // or 
+        // f =  thrust /R.c.z;                             // relative-force = f/mg   ---  f = 1 is hover force         // f = m*g*R.c.z;  // or 
         M = SO3_attitude_control( R, omega, Rd);
         get_motor_commands();
 #if MOTOR_ON
@@ -207,18 +211,25 @@ public:
 
     void stop_motors(){
 #if MOTOR_ON
-        set_motor_speeds(1000, 1000, 1000, 1000);
+        set_motor_speeds(0, 0, 0, 0);
 #endif
     }
 
     void motor_test(){
 #if MOTOR_ON
-        for(int i = 0; i<=300; i+=20){
-            set_motor_speeds(1000+i, 1000+i, 1000+i, 1000+i);
-            delay(3000);
+        for(float i = 0; i<=30000; i++){
+            set_motor_speeds(i/1000.0, i/1000.0, i/1000.0, i/1000.0);
+            delayMicroseconds(100);
         }
         stop_motors();
-        delay(5000);
+        delay(1000);
 #endif
+    }
+
+    void run_all_motors(float throttle_percent){
+#if MOTOR_ON
+        set_motor_speeds(throttle_percent, throttle_percent, throttle_percent, throttle_percent);
+#endif
+        return;
     }
 };

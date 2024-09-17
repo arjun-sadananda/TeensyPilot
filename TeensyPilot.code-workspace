@@ -62,7 +62,8 @@
 			"typeinfo": "cpp",
 			"cstring": "cpp",
 			"unordered_set": "cpp",
-			"map": "cpp"
+			"map": "cpp",
+			"complex": "cpp"
 		}
 	}
 }

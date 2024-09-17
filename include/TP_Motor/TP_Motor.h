@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Servo.h>
+// #include <PWMServo.h>
 
 // #include "teensyshot/ESCCMD.h"
 // #include "teensyshot/DSHOT.h"
@@ -8,6 +9,8 @@
 // FlexPWM4.0	22
 // FlexPWM4.1	23	4.482 kHz
 // FlexPWM4.2	2, 3
+// FlexPWM2.3	36, 37
+
 #define ESCPIN1 23
 #define ESCPIN2 22
 #define ESCPIN3 37
@@ -18,24 +21,88 @@
 
 class TP_MOTOR{
 protected:
-    Servo ESC1, ESC2, ESC3, ESC4;
-
+    uint8_t resolution;
+    float frequency;
+    float total_us, min_us;
+    uint16_t min_ticks, total_ticks, ticks_range;
+    // Servo ESC1, ESC2, ESC3, ESC4;
+    
     void ESC_setup(){
-        ESC1.attach(ESCPIN1, 1000, 2000);
-        ESC2.attach(ESCPIN2, 1000, 2000);
-        ESC3.attach(ESCPIN3, 1000, 2000);
-        ESC4.attach(ESCPIN4, 1000, 2000);
+        // 0 - 32757  -> 15     4577.64 Hz
+        // 0 - 16383  -> 14     9155.27 Hz
+        // 0 - 8191   -> 13     18310.55 Hz
+        // 0 - 4095   -> 12     36621.09 Hz
+        // 0 - 2047   -> 11     73242.19 Hz
 
-        ESC1.writeMicroseconds(1000);
-        ESC2.writeMicroseconds(1000);
-        ESC3.writeMicroseconds(1000);
-        ESC4.writeMicroseconds(1000); // 3 beeps - powering on
+        // multishot  --- min_ticks = 1874.99, max_ticks 3749.9, tot: 4095
+        // frequency   = 30000;
+        // resolution  = 12;
+        // min_us      = 12.5;
+
+        //  oneshot42
+        // frequency   = 9155.27;    // must be less that 12195 for oneshot42
+        // resolution  = 14;
+        // min_us      = 42.0;
+
+        //  oneshot125
+        // frequency   = 1000.0;    // must be less that 12195 for oneshot42
+        // resolution  = 15;
+        // min_us      = 125.0;
+
+        // standard pwm  --- min_ticks: 16056.32   max 32112.64   tot 32757
+        frequency   = 490.0;
+        resolution  = 15;
+        min_us      = 1000.0;
+
+        total_ticks = pow(2,resolution);
+        total_us    = 1e6/frequency;
+        min_ticks   = min_us/total_us*total_ticks;
+        ticks_range = min_ticks;
+
+	    digitalWrite(ESCPIN1, LOW);
+	    digitalWrite(ESCPIN2, LOW);
+	    digitalWrite(ESCPIN3, LOW);
+	    digitalWrite(ESCPIN4, LOW);
+
+        pinMode(ESCPIN1, OUTPUT);
+        pinMode(ESCPIN2, OUTPUT);
+        pinMode(ESCPIN3, OUTPUT);
+        pinMode(ESCPIN4, OUTPUT);
+
+        // 0us    42us       84us       100us       126us
+        // 0      3440.22    6880.44    8191
+        // 0      1720.32    3440.64    4096
+
+        // analogWriteFrequency(pin, 50);
+
+        // 146484.38
+        // 100us        -> 10000   Hz    
+        // 109.2267us   ->  9155.27Hz     14bit
+        // 126us        ->  7936.5 Hz    
+        analogWriteFrequency(ESCPIN1, frequency);
+        analogWriteFrequency(ESCPIN2, frequency);
+        analogWriteFrequency(ESCPIN3, frequency);
+        analogWriteFrequency(ESCPIN4, frequency);
+
+        analogWriteResolution(resolution);
+
+        // ESC1.attach(ESCPIN1, 1000, 2000);
+        // ESC2.attach(ESCPIN2, 1000, 2000);
+        // ESC3.attach(ESCPIN3, 1000, 2000);
+        // ESC4.attach(ESCPIN4, 1000, 2000);
+
+        // ESC1.writeMicroseconds(1000);
+        // ESC2.writeMicroseconds(1000);
+        // ESC3.writeMicroseconds(1000);
+        // ESC4.writeMicroseconds(1000); // 3 beeps - powering on
+        set_motor_speeds(0,0,0,0);
         delay(1500);
 
-        ESC1.writeMicroseconds(1200);
-        ESC2.writeMicroseconds(1200);
-        ESC3.writeMicroseconds(1200);
-        ESC4.writeMicroseconds(1200);   // 1 long low beep - arming sequence begins
+        // ESC1.writeMicroseconds(1200);
+        // ESC2.writeMicroseconds(1200);
+        // ESC3.writeMicroseconds(1200);
+        // ESC4.writeMicroseconds(1200);   // 1 long low beep - arming sequence begins
+        set_motor_speeds(20,20,20,20);
         delay(1500);
     #if ESC_CALIB
         // Calibration 
@@ -54,19 +121,25 @@ protected:
         delay(7000);                   // falling beeps - calibration done
         // Calibration Ended
     #endif
-        ESC1.writeMicroseconds(1000);
-        ESC2.writeMicroseconds(1000);
-        ESC3.writeMicroseconds(1000);
-        ESC4.writeMicroseconds(1000);   // 1 long high beep (if not callibrating) - arming sequence ends
+        // ESC1.writeMicroseconds(1000);
+        // ESC2.writeMicroseconds(1000);
+        // ESC3.writeMicroseconds(1000);
+        // ESC4.writeMicroseconds(1000);   // 1 long high beep (if not callibrating) - arming sequence ends
+        set_motor_speeds(0,0,0,0);
         delay(5000);
     }
 
-    void set_motor_speeds(int m1, int m2, int m3, int m4){
+    void set_motor_speeds(float m1, float m2, float m3, float m4){
         // add conditions
-        ESC1.writeMicroseconds(m1);
-        ESC2.writeMicroseconds(m2);
-        ESC3.writeMicroseconds(m3);
-        ESC4.writeMicroseconds(m4);
+        // ESC1.writeMicroseconds(m1);
+        // ESC2.writeMicroseconds(m2);
+        // ESC3.writeMicroseconds(m3);
+        // ESC4.writeMicroseconds(m4);
+
+        analogWrite(ESCPIN1, min_ticks + (int) m1/100.0*ticks_range);
+        analogWrite(ESCPIN2, min_ticks + (int) m2/100.0*ticks_range);
+        analogWrite(ESCPIN3, min_ticks + (int) m3/100.0*ticks_range);
+        analogWrite(ESCPIN4, min_ticks + (int) m4/100.0*ticks_range);
 
         // IMPORTANT Add safety features, to prevent it from flying away
     }

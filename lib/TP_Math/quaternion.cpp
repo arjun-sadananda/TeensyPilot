@@ -862,6 +862,14 @@ QuaternionT<T> QuaternionT<T>::angular_difference(const QuaternionT<T> &v) const
     return v.inverse() * *this;
 }
 
+// angular difference in radians between quaternions
+template <typename T>
+T QuaternionT<T>::angular_difference2(const QuaternionT<T> &v) const
+{
+    QuaternionT<T> temp;
+    temp = v.inverse() * *this; 
+    return 2*acos(temp.q1);
+}
 
 // define for float and double
 template class QuaternionT<float>;

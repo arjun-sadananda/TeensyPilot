@@ -1,0 +1,13 @@
+"filename", "language", "Python", "C++", "comment", "blank", "total"
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\lib\TP_Math\matrix3.cpp", "C++", 0, -202, -54, -34, -290
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\lib\TP_Math\matrix3.h", "C++", 0, -132, -114, -49, -295
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\lib\TP_Math\quaternion.cpp", "C++", 0, -620, -128, -121, -869
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\lib\TP_Math\quaternion.h", "C++", 0, -105, -69, -48, -222
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\lib\TP_Math\rotations.h", "C++", 0, -54, -36, -6, -96
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\lib\TP_Math\vector2.h", "C++", 0, -99, -60, -37, -196
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\lib\TP_Math\vector3.h", "C++", 0, -394, -95, -51, -540
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\py scripts\MagRecordPlot.py", "Python", 65, 0, 73, 40, 178
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\py scripts\TP_Estimators_Display.py", "Python", 202, 0, 18, 49, 269
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\py scripts\TP_Monitor.py", "Python", 119, 0, 14, 35, 168
+"c:\Users\Admin\Documents\PlatformIO\Projects\TeensyPilot\py scripts\TP_Monitor2.py", "Python", 354, 0, 26, 68, 448
+"Total", "-", 740, -1606, -425, -154, -1445

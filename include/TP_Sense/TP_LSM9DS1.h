@@ -225,6 +225,7 @@ public:
         // BOOT     BDU     H_LACTIVE   PP_OD   SIM     IF_ADD_INC  BLE     SW_RESET
         // 0        0       0           0       0       1           0       1
         write8(LSM9DS1_ADDRESS_ACCELGYRO, LSM9DS1_REGISTER_CTRL_REG8, 0x05);
+        //write8(LSM9DS1_REGISTER_CTRL_REG8, 0x05);
 
         delay(10);
 
@@ -232,10 +233,11 @@ public:
                             0      0      1       1       1       0   0   0 
         */
         write8(LSM9DS1_ADDRESS_ACCELGYRO, LSM9DS1_REGISTER_CTRL_REG4, 0x38);
+        // write8(LSM9DS1_REGISTER_CTRL_REG4, 0x38);
         /* 
          * CTRL_REG1_G: |  ODR_G2   ODR_G1  ODR_G0    | FS_G1   FS_G0  | 0(1)  |  BW_G1   BW_G0  |
          *              |    1        1       0       |   0       1    |   0   |    0       0    |     (BW: 33, 40, 58, 100)
-         *              |    Output Data Rate 952Hz,  |     500DPS     |       |  Cuttoff 100Hz  |
+         *              |    Output Data Rate 952Hz,  |     500DPS     |       |  Cuttoff 33Hz or 100hz?  |
          */
         write8(LSM9DS1_ADDRESS_ACCELGYRO, LSM9DS1_REGISTER_CTRL_REG1_G, 0xC0 | LSM9DS1_GYROSCALE_500DPS); // on XYZ
         gyro_dps_digit = LSM9DS1_GYRO_DPS_DIGIT_500DPS;
@@ -292,7 +294,8 @@ public:
         // float temp[6] =  {1.29, 1.31, 1.28, 0.027, -0.0698, 0.01394};
         // float temp[6] =  {0.670999, 0.688844, 0.518978, 0.008017, 0.080208, -0.002301};
         HardOffsetVect.set(-587.808893, 1041.364679, 2152.803319);
-        float temp[6] =  {0.547561, 0.553483, 0.590261, -0.023879, -0.005508, -0.002054};
+        float temp[6] =  {0.547561, 0.553483, 0.590261, 
+                        -0.023879, -0.005508, -0.002054};
         SoftCalibMat.a.set(temp[0], temp[3], temp[4]);
         SoftCalibMat.b.set(temp[3], temp[1], temp[5]);
         SoftCalibMat.c.set(temp[4], temp[5], temp[2]);
@@ -312,7 +315,7 @@ public:
         // 2000000  : 90us
         // 3000000  : 62us
         // 4000000  : 48us
-        // 8000000  : 48us
+        // 8000000  : 26us
 
         digitalWrite(LSM_CSAG_pin,LOW);
         SPI1.transfer(LSM9DS1_REGISTER_OUT_X_L_G | 0x80);

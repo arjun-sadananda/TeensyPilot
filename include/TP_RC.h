@@ -1,6 +1,6 @@
 
 #include "CRSFforArduino.hpp"
-
+// The original SerialReceiver::begin() called from CRSFforArduino::begin() has been modified to Skip Compatibility Test
 enum switch3{
     ONE,
     TWO,
@@ -8,7 +8,6 @@ enum switch3{
 };
 
 struct RC_Command{
-    
     uint16_t throttle, yaw, roll, pitch;
     bool arm, r_toggle;
     enum switch3 sw1, sw2, sw3;
