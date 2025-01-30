@@ -17,6 +17,7 @@
 #define SD_LOG_ALL_ESTIMATOR 2
 #define SD_LOG_DRONE_MONITOR 3
 #define SD_LOG_TWO_ESTIMATORS 4
+#define SD_LOG_EST_COMP 5
 
 // #define DEBUG_MODE true
 // #define DEBUG_AHRS true
@@ -24,10 +25,11 @@
 
 // #define MOTORS_ON false
 
-#define display_type    DRONE_MONITOR
-#define serial_type     SERIAL_DEBUG
-#define sd_log_type     SD_LOG_TWO_ESTIMATORS
+#define display_type    DISPLAY_OFF
+#define serial_type     MEKF2_COMPARE_MONITOR
+#define sd_log_type     SD_LOG_OFF
 
+#define MOTOR_ON
 #if serial_type == SERIAL_DEBUG
     #define debug(x) Serial.print(x); Serial.print(" ");
     #define debugln(x) Serial.println(x)
@@ -177,23 +179,23 @@ int main(void)
         // else if(micros()-loop_start_time < 12000000)
         //     tp_control.run_all_motors(75.0);
 
-        static uint32_t rec_stop_time = 24000000;
-        if(micros()-loop_start_time < 3000000)
-            tp_control.run_all_motors(0.0);
-        else if(micros()-loop_start_time < 6000000)
-            tp_control.run_all_motors(5.0);
-        else if(micros()-loop_start_time < 9000000)
-            tp_control.run_all_motors(10.0);
-        else if(micros()-loop_start_time < 12000000)
-            tp_control.run_all_motors(20.0);
-        else if(micros()-loop_start_time < 15000000)
-            tp_control.run_all_motors(30.0);
-        else if(micros()-loop_start_time < 18000000)
-            tp_control.run_all_motors(40.0);
-        else if(micros()-loop_start_time < 21000000)
-            tp_control.run_all_motors(70.0);
-        else
-            tp_control.stop_motors();
+        // static uint32_t rec_stop_time = 24000000;
+        // if(micros()-loop_start_time < 3000000)
+        //     tp_control.run_all_motors(0.0);
+        // else if(micros()-loop_start_time < 6000000)
+        //     tp_control.run_all_motors(5.0);
+        // else if(micros()-loop_start_time < 9000000)
+        //     tp_control.run_all_motors(10.0);
+        // else if(micros()-loop_start_time < 12000000)
+        //     tp_control.run_all_motors(20.0);
+        // else if(micros()-loop_start_time < 15000000)
+        //     tp_control.run_all_motors(30.0);
+        // else if(micros()-loop_start_time < 18000000)
+        //     tp_control.run_all_motors(40.0);
+        // else if(micros()-loop_start_time < 21000000)
+        //     tp_control.run_all_motors(70.0);
+        // else
+        //     tp_control.stop_motors();
 
         /*
          * Controller Switch: Throw Trigger
@@ -386,6 +388,78 @@ int main(void)
             displayStatus("Done Logging");
             sd_log_count ++;
         }
+    #elif sd_log_type == SD_LOG_EST_COMP
+        static int sd_log_skip_count = 0;
+        // const int sd_log_skip = 50;
+        const int rec_stop_time = 60*1000000;//60sec
+        bool log_done = false;
+
+        static String data;
+        static Quaternion q_no_triad, q_no_triad_acc, q_triad, identity;
+        //sd_log_count < 500
+        if(micros()-loop_start_time < rec_stop_time && myFile){
+            q_no_triad = tp_estimator.tp_mekf2.get_q();
+            q_no_triad_acc = tp_estimator.tp_mekf2_acc.get_q();
+            q_triad = tp_estimator.tp_mekf2_triad.get_q();
+            // q_only_triad.from_rotation_matrix(tp_estimator.tp_triad.DCM);
+            data = String(iter_start_time-loop_start_time)
+                        // + "," + String(tp_estimator.GyroRate.x, 6) 
+                        // + "," + String(tp_estimator.GyroRate.y, 6) 
+                        // + "," + String(tp_estimator.GyroRate.z, 6)
+                        // + "," + String(tp_estimator.UnitAccVect.x, 6) 
+                        // + "," + String(tp_estimator.UnitAccVect.y, 6) 
+                        // + "," + String(tp_estimator.UnitAccVect.z, 6)
+                        // + "," + String(tp_estimator.UnitMagVect.x, 6) 
+                        // + "," + String(tp_estimator.UnitMagVect.y, 6) 
+                        // + "," + String(tp_estimator.UnitMagVect.z, 6)
+
+                        // + "," + String(q_no_triad.q1, 6)
+                        // + "," + String(q_no_triad.q2, 6)
+                        // + "," + String(q_no_triad.q3, 6)
+                        // + "," + String(q_no_triad.q4, 6)
+                        // + "," + String(q_no_triad_acc.q1, 6)
+                        // + "," + String(q_no_triad_acc.q2, 6)
+                        // + "," + String(q_no_triad_acc.q3, 6)
+                        // + "," + String(q_no_triad_acc.q4, 6)
+                        // + "," + String(q_triad.q1, 6)
+                        // + "," + String(q_triad.q2, 6)
+                        // + "," + String(q_triad.q3, 6)
+                        // + "," + String(q_triad.q4, 6)
+
+                        // + "," + String(tp_estimator.GyroRate.length(), 6)
+                        // + "," + String(acos(tp_estimator.UnitAccVect.dot(tp_estimator.a_ref)), 6)
+                        // + "," + String(acos(tp_estimator.UnitMagVect.dot(tp_estimator.m_ref)), 6)
+
+                        // + "," + String(q_no_triad.get_euler_roll(),6)
+                        // + "," + String(q_no_triad.get_euler_pitch(),6)
+                        // + "," + String(q_no_triad.get_euler_yaw(),6)
+                        
+                        // + "," + String(q_no_triad_acc.get_euler_roll(),6)
+                        // + "," + String(q_no_triad_acc.get_euler_pitch(),6)
+                        // + "," + String(q_no_triad_acc.get_euler_yaw(),6)
+                        
+                        // + "," + String(q_triad.get_euler_roll(),6)
+                        // + "," + String(q_triad.get_euler_pitch(),6)
+                        // + "," + String(q_triad.get_euler_yaw(),6)
+
+                        + "," + String(q_no_triad.angular_difference2(identity),6)
+                        + "," + String(q_no_triad_acc.angular_difference2(identity),6)
+                        + "," + String(q_triad.angular_difference2(identity),6)
+                        + "," + String(1.57079632679,6)
+                        + "," + String(3.14159265359,6)
+
+                        + "," + String(tp_estimator.tp_mekf2.get_res_norm(),6)
+                        + "," + String(tp_estimator.tp_mekf2_acc.get_res_norm(),6)
+                        + "," + String(tp_estimator.tp_mekf2_triad.get_res_norm(),6);
+
+            myFile.println(data);
+            // sd_log_count ++;
+        }
+        else if(log_done == false){
+            myFile.close();
+            displayStatus("Done Logging");
+            log_done = true;
+        }
     #endif
 #endif
 
@@ -479,7 +553,7 @@ int main(void)
     #elif serial_type == ALL_ESTIMATORS_MONITOR
             ALL_ESTIMATORS_print(tp_estimator);
             
-    #elif serial_type == MAG_FOR_CALIB
+    #elif serial_type == SERIAL_FOR_MAG_CALIB
             //Magneto Calibrate 
             Serial.print(int(tp_estimator.MagRaw.x));
             Serial.print(",");

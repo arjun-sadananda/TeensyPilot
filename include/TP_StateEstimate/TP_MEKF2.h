@@ -47,11 +47,14 @@ public:
     Vector3d a_p, m_p;
     Vector3f a_m, m_m, w_m, a_ref, m_ref;
     double dy[9];
-    double get_a_res_norm(){
+    double get_m_res_norm(){
         return sq(dy[0]) + sq(dy[1]) + sq(dy[2]);
     }
-    double get_m_res_norm(){
+    double get_a_res_norm(){
         return sq(dy[3]) + sq(dy[4]) + sq(dy[5]);
+    }
+    double get_res_norm(){
+        return sqrt(sq(dy[0]) + sq(dy[1]) + sq(dy[2]) + sq(dy[3]) + sq(dy[4]) + sq(dy[5]) + sq(dy[6]) + sq(dy[7]) + sq(dy[8]));
     }
     TP_MEKF2(){
         q[0] = 1.0;   q[1] = 0.0;   q[2] = 0.0;   q[3] = 0.0;

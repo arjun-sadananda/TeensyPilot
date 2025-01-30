@@ -5,7 +5,7 @@ import time
 import csv
 
 
-SERIAL_PORT = 'COM4'
+SERIAL_PORT = 'COM3'
 BAUD_RATE = 57600 #115200
 
 ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=.1)
@@ -96,8 +96,13 @@ def read_and_process_data():
 while True:
     read_and_process_data()
     # time.sleep(0.05)
-    if N == 750:
+    if N == 400:
         break
+# try:
+#     while True:
+#         read_and_process_data()
+# except KeyboardInterrupt:
+#     pass
 
 # csv.reader
 # file = open('mag_read.csv')
@@ -137,11 +142,13 @@ ax_raw.set_zlim3d(-3000, 3000)
 ub = 4000
 lb = -4000
 ax_raw.set_box_aspect([ub - lb for lb, ub in (getattr(ax_raw, f'get_{a}lim')() for a in 'xyz')])
-# ax_raw.scatter(mx[0:int(N/3)],my[0:int(N/3)],mz[0:int(N/3)],color='red')
-# ax_raw.scatter(mx[int(N/3):2*int(N/3)],my[int(N/3):2*int(N/3)],mz[int(N/3):2*int(N/3)],color='green')
-# ax_raw.scatter(mx[2*int(N/3):N],my[2*int(N/3):N],mz[2*int(N/3):N],color='blue')
-ax_raw.scatter(mx,my,mz,color='red')
-ax_raw.scatter(mx_cal,my_cal,mz_cal,color='blue')
+
+ax_raw.scatter(mx[0:int(N/3)],my[0:int(N/3)],mz[0:int(N/3)],color='red')
+ax_raw.scatter(mx[int(N/3):2*int(N/3)],my[int(N/3):2*int(N/3)],mz[int(N/3):2*int(N/3)],color='green')
+ax_raw.scatter(mx[2*int(N/3):N],my[2*int(N/3):N],mz[2*int(N/3):N],color='blue')
+
+# ax_raw.scatter(mx,my,mz,color='red')
+# ax_raw.scatter(mx_cal,my_cal,mz_cal,color='blue')
 
 plt.show()
 

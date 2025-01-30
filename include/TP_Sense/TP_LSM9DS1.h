@@ -12,7 +12,7 @@
 #define LSM_CSAG_pin 25
 #define LSM_CSM_pin  24
 
-#define LSM9DS1_use_SPI true
+#define LSM9DS1_use_SPI false
 
 #define LSM9DS1_ADDRESS_ACCELGYRO (0x6B)
 #define LSM9DS1_ADDRESS_MAG (0x1E)
@@ -388,8 +388,8 @@ public:
         UnitAccVect = AccelBody.normalized();
 
         //Calibration
-        // MagVect = SoftCalibMat*(MagRaw-HardOffsetVect);
         MagRaw = Mag.tofloat();
+        // MagVect = SoftCalibMat*(MagRaw-HardOffsetVect);
         MagVect = MagRaw;
         // MagRaw.rotate(TO_NED_FRAME);
         UnitMagVect = MagVect.normalized();
@@ -414,26 +414,26 @@ public:
     }
     
     void set_m_ref(){
-        Vector3f sum;
-        for(int i = 0; i<3000; i++){
-            read_sensors();
-            sum += UnitMagVect;
-            delayMicroseconds(100);
-        }
-        m_ref = sum/=3000;
-        // m_ref.set(38290.3, 0, 20923.0); //NED
+        // Vector3f sum;
+        // for(int i = 0; i<3000; i++){
+        //     read_sensors();
+        //     sum += UnitMagVect;
+        //     delayMicroseconds(100);
+        // }
+        // m_ref = sum/=3000;
+        m_ref.set(38290.3, 0, 20923.0); //NED
         m_ref.normalize();
     }    
     
     void set_a_ref(){
-        Vector3f sum;
-        for(int i = 0; i<3000; i++){
-            read_sensors();
-            sum += UnitAccVect;
-            delayMicroseconds(100);
-        }
-        a_ref = sum/=3000;
-        // m_ref.set(38290.3, 0, 20923.0); //NED
-        a_ref.normalize();
+        // Vector3f sum;
+        // for(int i = 0; i<3000; i++){
+        //     read_sensors();
+        //     sum += UnitAccVect;
+        //     delayMicroseconds(100);
+        // }
+        // a_ref = sum/=3000;
+        // a_ref.normalize();
+        a_ref.set(0,0,1.0);
     }
 };

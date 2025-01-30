@@ -2,11 +2,11 @@
 // #include<vector3.h>
 // #include<AP_Math.h>
 
-#include "TP_Motor\TP_Motor.h"
+#include "TP_Motor\TP_Motor_2DOF.h"
 
-#define MOTOR_ON false
+#define MOTOR_ON true
 
-class TP_Control : protected TP_MOTOR{
+class TP_Control_2DOF : protected TP_MOTOR_2DOF{
 public:
     // static const float m = 1, g=1; // 550gms
     Vector3f M;
@@ -191,7 +191,7 @@ public:
         get_motor_commands();
 #if MOTOR_ON
         if (motor_on)
-            set_motor_speeds(v[0], v[1], v[2], v[3]);
+            set_motor_speeds(v[0], v[1]);
 #endif
     }
 
@@ -205,22 +205,50 @@ public:
         get_motor_commands();
 #if MOTOR_ON
         if (motor_on)
-            set_motor_speeds(v[0], v[1], v[2], v[3]);
+            set_motor_speeds(v[0], v[1]);
+#endif
+    }
+
+    void twoDOF_go_to_zero(float pitch, float yaw, bool motor_on){
+        // pitch .8 to -.8
+        // yaw -3.14 to 3.14
+        static float m_pitch,m_yaw;
+        static float kp_pitch = 1.0/.8*10.0, kp_yaw = 2.0/3.14*5.0;
+        static float kI_pitch = .001;
+        static float m3_bias = 8.0;
+        static float pitch_I = 0;
+        if (pitch < .4 && pitch>-.4)
+            pitch_I += pitch;
+        m_pitch = kp_pitch*pitch + m3_bias + kI_pitch*pitch_I;
+        m_yaw = kp_yaw  *yaw;
+#if MOTOR_ON
+        if (motor_on)
+            set_motor_speeds(m_yaw ,m_pitch);
 #endif
     }
 
     void stop_motors(){
 #if MOTOR_ON
-        set_motor_speeds(0, 0, 0, 0);
+        set_motor_speeds(0, 0);
 #endif
     }
 
     void motor_test(){
 #if MOTOR_ON
-        for(float i = 0; i<=30000; i++){
-            set_motor_speeds(i/1000.0, i/1000.0, i/1000.0, i/1000.0);
-            delayMicroseconds(100);
+        // for(float i = 0; i<=30000; i++){
+        //     set_motor_speeds(i/1000.0, i/1000.0);
+        //     delayMicroseconds(100);
+        // }
+        for(float i = 0; i<=10; i+=10){
+            set_motor_speeds(i, 0);
+            delayMicroseconds(5000000);
         }
+        for(float i = 0; i<=10; i+=10){
+            set_motor_speeds(0, i);
+            delayMicroseconds(5000000);
+        }
+        // set_motor_speeds(5, 5);
+        delayMicroseconds(5000000);
         stop_motors();
         delay(1000);
 #endif
@@ -228,7 +256,7 @@ public:
 
     void run_all_motors(float throttle_percent){
 #if MOTOR_ON
-        set_motor_speeds(throttle_percent, throttle_percent, throttle_percent, throttle_percent);
+        set_motor_speeds(throttle_percent, throttle_percent);
 #endif
         return;
     }

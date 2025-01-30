@@ -19,6 +19,8 @@
 #include "TP_StateEstimate\TP_EKF.h"
 #include "TP_StateEstimate\TP_MEKF.h"
 #include "TP_StateEstimate\TP_MEKF2.h"
+#include "TP_StateEstimate\TP_MUKF.h"
+#include "TP_StateEstimate\TP_MUKF2.h"
 
 // BKF, TRIAD, EKF, MEKF_acc, MEKF_mag, 
 // MEKF2, MEKF2_TRIAD, ALL_ESTIMATORS, MEKF2_COMPARE
@@ -33,8 +35,10 @@
 #define ALL_ESTIMATORS 7
 #define MEKF2_COMPARE 8
 #define MEKF2_COMPARE2 9
+#define MUKF 10
+#define MUKF2 11
 
-#define ESTIMATOR MEKF2_COMPARE2
+#define ESTIMATOR MEKF_acc
 // #define ESTIMATOR MEKF2_TRIAD
 
 #define MPU_QMC 0
@@ -84,6 +88,12 @@ public:
 #endif
 #if ESTIMATOR == MEKF2_COMPARE
     TP_MEKF2 tp_mekf2_acc;
+#endif
+#if ESTIMATOR == MUKF
+    TP_MUKF tp_mukf;
+#endif
+#if ESTIMATOR == MUKF2
+    TP_MUKF2 tp_mukf2;
 #endif
 
     /*
@@ -187,6 +197,12 @@ public:
         // mag.set_m_ref();
         tp_mekf2_acc.init_estimator(a_ref, m_ref, false, 5.0e-2);
 #endif
+#if ESTIMATOR == MUKF
+        tp_mukf.init_estimator(a_ref);
+#endif
+#if ESTIMATOR == MUKF2
+        tp_mukf2.init_estimator(a_ref, m_ref);
+#endif
     }
 
     /*
@@ -255,6 +271,17 @@ public:
 #endif
 #if ESTIMATOR == MEKF2_COMPARE
         tp_mekf2_acc.estimate_attitude(UnitMagVect, UnitAccVect, GyroRate, dt);
+#endif
+#if ESTIMATOR == MUKF
+        tp_mukf.estimate_attitude(UnitAccVect, GyroRate, dt);
+        q = tp_mukf.get_q();
+#endif
+#if ESTIMATOR == MUKF2
+        static Vector3f a,m;
+        a.set(UnitAccVect.x,UnitAccVect.y,UnitAccVect.z);
+        m.set(UnitMagVect.x,UnitMagVect.y,UnitMagVect.z);
+        tp_mukf2.estimate_attitude(m, a, GyroRate, dt);
+        q = tp_mukf2.get_q();
 #endif
 
         // q.from_rotation_matrix(tp_triad.DCM);
