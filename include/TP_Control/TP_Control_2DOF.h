@@ -2,11 +2,12 @@
 // #include<vector3.h>
 // #include<AP_Math.h>
 
-#include "TP_Motor\TP_Motor_2DOF.h"
+// #include "TP_Motor\TP_Motor_2DOF.h"
+#include "TP_Motor\TP_Motor_2DOF_simple.h"
 
 #define MOTOR_ON true
 
-class TP_Control_2DOF : protected TP_MOTOR_2DOF{
+class TP_Control_2DOF : protected TP_MOTOR_2DOF_SIMPLE{
 public:
     // static const float m = 1, g=1; // 550gms
     Vector3f M;
@@ -15,161 +16,9 @@ public:
     // DO NOT ignore Yaw, It causes problem in roll and pitch as well!!
     const bool ignore_yaw = false;
     
-    int get_max_vel(){
-        return int(f_cap*hover_throttle);
-    }
-    float get_f_cap(){
-        return f_cap;
-    }
 private:
-    Vector3f e_R, e_Omega, e_R_I;
-    const float k_R = .75, k_Omega = 0.1, k_I = 0.002;//.01;
-
-    Matrix3f R_err;
-
-    float vertical_rel_thrust = 1; // redundant
-    const float f_cap = 3.0, f_arm = 0.1; //arm_throttle = 1050;
-    float hover_throttle = 30.0; // throttle when f=1; arm_throttle = 1000 + hover_throttle * f_arm = 1020 
-
-    // uint16_t half_throttle = 300;
-    const float hover_offset_2 = 10, hover_offset_4 = 10; // -10  0
-    const float hover_offset_1 = 0, hover_offset_3 = 0; // -80 -70
-
-
-    Vector3f euler_attitude_control(const Matrix3f R, const Vector3f omega){
-        
-        static Vector3f e_R, e_Omega, M;
-        // static float k_R = 4, k_Omega = 1;
-        static Matrix3f J;
-        J.identity();
-
-        e_R = R.to_euler312();              //                      // e_R \in (-1.5, 1.5)
-        e_Omega = omega;
-
-        M = - e_R;// * k_R - e_Omega * k_Omega;// + omega%(J*omega);   // M must be in Nm
-
-        return M;
-    }
-
-    Vector3f SO3_attitude_control(const Matrix3f R, const Vector3f omega){
-        static Vector3f M;
-        static Matrix3f J;
-        J.identity();
-
-        R_err = R-R.transposed();                           // This is skew symmetric
-        e_R.set(R_err.c.y/2, R_err.a.z/2, R_err.b.x/2);     // Can test omega control and angle control independently
-                                                            // e_R      \in (-1, 1)^3
-        e_Omega = omega;                                    // e_Omega  \in  rad/sec
-
-        static float phi;
-        phi = 3 - (R.a.x + R.b.y + R.c.z);
-        if (phi < .3)
-            e_R_I += e_R;
-        M = -e_R*k_R -e_Omega*k_Omega - e_R_I*k_I;          // + omega%(J*omega);
-        // if (e_R_I.length())
-        // ***
-        // To tackle magnetic disturbance affecting yaw...
-        // How about different k for 3 components???
-
-        return M;
-    }
-
-    Vector3f SO3_attitude_control(const Matrix3f R, const Vector3f omega, const Matrix3f Rd){
-        static Vector3f M;
-        static Matrix3f J;
-        J.identity();
-
-        R_err = Rd.transposed()*R-R.transposed()*Rd;                  // This is skew symmetric
-        e_R.set(R_err.c.y/2, R_err.a.z/2, R_err.b.x/2);     // Can test omega control and angle control independently
-                                                            // e_R      \in (-1, 1)^3
-        e_Omega = omega;                                    // e_Omega  \in  rad/sec
-
-        // static float phi;
-        // phi = 3 - (R.a.x + R.b.y + R.c.z);
-        // if (phi < .3)
-        //     e_R_I += e_R;
-        // if (e_R_I.length()>300.0){
-        //     e_R_I.normalize();
-        //     e_R_I*=300.0;
-        // }
-        // ***
-        // To tackle magnetic disturbance affecting yaw...
-        // How about different k for 3 components???
-        M = -e_R*k_R -e_Omega*k_Omega - e_R_I*k_I;// + omega%(J*omega);
-
-        return M;
-    }
-
-    void get_motor_commands(){
-        static float f1, f2, f3, f4;
-        // f = 1
-        static float c_inv = 1.2, k_d = .8;// d = 1,  d<1 -> more sensitive to roll commands // d 142mm .142 m, c in units
-        // Props In configuration
-
-        if (ignore_yaw)
-            c_inv = 0;
-
-        // f1 = (f - M.x/d + M.y/d + M.z*c_inv )/4;
-        // f2 = (f - M.x/d - M.y/d - M.z*c_inv )/4;
-        // f3 = (f + M.x/d + M.y/d - M.z*c_inv )/4;
-        // f4 = (f + M.x/d - M.y/d + M.z*c_inv )/4;
-
-        f1 = f - k_d*M.x + k_d*M.y + M.z*c_inv;
-        f2 = f - k_d*M.x - k_d*M.y - M.z*c_inv;
-        f3 = f + k_d*M.x + k_d*M.y - M.z*c_inv;
-        f4 = f + k_d*M.x - k_d*M.y + M.z*c_inv;
-
-        // f1 = f - M.x + M.y + M.z*c_inv; // yaw was ulta
-        // f2 = f - M.x - M.y - M.z*c_inv;
-        // f3 = f + M.x + M.y - M.z*c_inv;
-        // f4 = f + M.x - M.y + M.z*c_inv;
-
-        v[0] = v[1] = v[2] = v[3] = 0;
-
-        // This is not good
-        // Maybe find max f
-        // scale everything to bring max f within range?
-        // Needs more thought
-        // if (f1<0) {f1 =  0;     f2 -= f1;      f3 -= f1;     f4 -= f1;}
-        // if (f2<0) {f1 -= f2;    f2  = 0;       f3 -= f2;     f4 -= f2;}
-        // if (f3<0) {f1 -= f3;    f2 -= f3;      f3  = 0;      f4 -= f3;}
-        // if (f4<0) {f1 -= f4;    f2 -= f4;      f3 -= f3;     f4  = 0; }
-
-        // if (f1>1) {f1  = 1;     f2 /= f1;     f3 /= f1;     f4 /= f1;}
-        // if (f2>1) {f1 /= f2;    f2  = 1;      f3 /= f2;     f4 /= f2;}
-        // if (f3>1) {f1 /= f3;    f2 /= f3;     f3  = 1;      f4 /= f3;}
-        // if (f4>1) {f1 /= f4;    f2 /= f4;     f3 /= f4;     f4  =  1;}
-
-        
-        // Check/Fix this
-        if (f1<f_arm) f1 = f_arm;
-        if (f2<f_arm) f2 = f_arm;
-        if (f3<f_arm) f3 = f_arm;
-        if (f4<f_arm) f4 = f_arm;
-
-        if (f1>f_cap) f1 = f_cap;
-        if (f2>f_cap) f2 = f_cap;
-        if (f3>f_cap) f3 = f_cap;
-        if (f4>f_cap) f4 = f_cap;
-
-        // f1 = f2 = f3 = f4 = 1; //For testing open loop speed control
-
-        v[0] = f1 * (hover_throttle) + hover_offset_1;
-        v[1] = f2 * (hover_throttle) + hover_offset_2;
-        v[2] = f3 * (hover_throttle) + hover_offset_3;
-        v[3] = f4 * (hover_throttle) + hover_offset_4;
-
-        // v[0] = 1000 + f1 * hover_throttle;
-        // v[1] = 1000 + f2 * hover_throttle;
-        // v[2] = 1000 + f3 * hover_throttle;
-        // v[3] = 1000 + f4 * hover_throttle;
-    }
 
 public:
-
-    void clear_integral(){
-        e_R_I.zero();
-    }
 
     void init_motors(){
 #if MOTOR_ON
@@ -178,49 +27,109 @@ public:
 #endif
     }
 
-    void angle_mode_controller( const Quaternion q, 
-                                const Vector3f omega, 
-                                const float thrust, 
-                                const Matrix3f Rd, 
-                                bool motor_on){
-        static Matrix3f R;
-        q.rotation_matrix(R);
-        f =  thrust *R.c.z;                             // relative-force = f/mg   ---  f = 1 is hover force         // f = m*g*R.c.z;  // or 
-        // f =  thrust /R.c.z;                             // relative-force = f/mg   ---  f = 1 is hover force         // f = m*g*R.c.z;  // or 
-        M = SO3_attitude_control( R, omega, Rd);
-        get_motor_commands();
-#if MOTOR_ON
-        if (motor_on)
-            set_motor_speeds(v[0], v[1]);
-#endif
-    }
-
-    void throw_mode_controller(Quaternion q, Vector3f omega, bool motor_on){
-        static Matrix3f R;
-        // static const float m = 1, g=1; // 550gms
-        q.rotation_matrix(R);
-        // f = m*g*R.c.z;  // or 
-        f = vertical_rel_thrust*R.c.z; // relative-force = f/mg   ---  f = 1 is hover force
-        M = SO3_attitude_control( R, omega);
-        get_motor_commands();
-#if MOTOR_ON
-        if (motor_on)
-            set_motor_speeds(v[0], v[1]);
-#endif
-    }
-
-    void twoDOF_go_to_zero(float pitch, float yaw, bool motor_on){
+    void twoDOF_go_to(float p, float y, float p_d, float y_d, bool motor_on){
         // pitch .8 to -.8
         // yaw -3.14 to 3.14
         static float m_pitch,m_yaw;
-        static float kp_pitch = 1.0/.8*10.0, kp_yaw = 2.0/3.14*5.0;
-        static float kI_pitch = .001;
-        static float m3_bias = 8.0;
-        static float pitch_I = 0;
-        if (pitch < .4 && pitch>-.4)
-            pitch_I += pitch;
-        m_pitch = kp_pitch*pitch + m3_bias + kI_pitch*pitch_I;
-        m_yaw = kp_yaw  *yaw;
+        static float e_p, e_y;
+        
+        // Quanser:
+        //      18.9     1.98     7.48       1.53      7.03      0.77
+        //      -2.22    19.4     -0.45      11.9      -0.77     7.03
+        // x =  p        y        pd         yd        pi        yi
+        float P_avg = 10;
+        float Y_avg = 5;
+        static float dt, e_pd, e_yd;
+        static float e_p_prev, e_y_prev, t_prev;
+        static float kp_pp = 8 , kp_py = -2, kd_pp =0,               kI_p = 1;
+        static float kp_yp = 0 , kp_yy = 8 ,            kd_yy = 1;
+        //1.0/.8*10.0
+        //2.0/3.14*5.0
+        static float mp_bias = 8.0;
+        static float p_I = 0;
+
+        // TODO Fix this difference
+        e_p = p - p_d; //rad
+        e_y = y - y_d; // rad
+        dt = (micros()-t_prev)/1000000; // sec
+        e_pd = (e_p - e_p_prev)/dt;     // rad/sec
+        e_yd = (e_y - e_y_prev)/dt;     // rad/sec
+        e_p_prev = e_p;
+        e_y_prev = e_y;
+        t_prev   = micros();
+        if (e_p < .4 && e_p>-.4)
+            p_I += e_p*dt;              // rad.sec
+        
+
+        m_pitch = kp_pp*e_p + kp_py*e_y + kd_pp*e_pd + kI_p*p_I + mp_bias;
+        m_yaw =   kp_yp*e_p + kp_yy*e_y + kd_yy*e_yd;
+
+#if MOTOR_ON
+        if (motor_on)
+            set_motor_speeds(m_yaw ,m_pitch);
+#endif
+    }
+
+    
+    void twoDOF_go_to_simple(float p, float y, float p_d, float y_d, bool motor_on){
+        // pitch .8 to -.8
+        // yaw -3.14 to 3.14
+        static float m_pitch,m_yaw;
+        static float e_p, e_y, e_y_smooth, e_p_smooth;
+        
+        // Quanser:
+        //      18.9     1.98     7.48       1.53      7.03      0.77
+        //      -2.22    19.4     -0.45      11.9      -0.77     7.03
+        // x =  p        y        pd         yd        pi        yi
+        static float dt, e_pd, e_yd;
+        static float e_p_prev, e_y_prev, t_prev;
+        const int N = 500;
+        static float e_p_window[N], e_y_window[N], sum_p,sum_y;
+        static float kp_pp = 20 , kd_pp = 4000, kI_p = 5;
+        static float kp_yy = 15, Kp_yy = 15 , kd_yy = 10000; // might need kI_y
+
+        static float mp_bias = 25.0;
+        static float p_I = 0;
+        
+        // TODO Fix this difference
+        e_p = p - p_d; //rad
+        e_y = y_d - y; // rad
+        //1.0/.8*10.0
+        //2.0/3.14*5.0
+        sum_y = 0;
+        sum_p = 0;
+        for (int i = 0; i<N-1; i++){
+            e_y_window[i] = e_y_window[i+1];
+            e_p_window[i] = e_p_window[i+1];
+            sum_y += e_y_window[i];
+            sum_p += e_p_window[i];
+        }
+        e_y_window[N-1] = e_y;
+        e_p_window[N-1] = e_p;
+
+        e_y_smooth = (sum_y+e_y)/N;
+        e_p_smooth = (sum_p+e_p)/N;
+
+        dt = (micros()-t_prev)/1000000; // sec
+        e_pd = (e_p_smooth - e_p_prev);     // rad/sec
+        e_yd = (e_y_smooth - e_y_prev);     // rad/sec
+        e_p_prev = e_p_smooth;
+        e_y_prev = e_y_smooth;
+        t_prev   = micros();
+        if (e_p < .4 && e_p>-.4)
+            p_I += e_p*dt;              // rad.sec
+        
+        // float
+        if (e_y_smooth < -1)
+            kp_yy = .5*Kp_yy;
+        else if (e_y_smooth <1)
+            kp_yy = Kp_yy;
+        else
+            kp_yy = .5*Kp_yy;
+
+        m_pitch = mp_bias + kp_pp*e_p + kd_pp*e_pd + kI_p*p_I;
+        m_yaw   =           kp_yy*e_y + kd_yy*e_yd;
+
 #if MOTOR_ON
         if (motor_on)
             set_motor_speeds(m_yaw ,m_pitch);
@@ -239,18 +148,49 @@ public:
         //     set_motor_speeds(i/1000.0, i/1000.0);
         //     delayMicroseconds(100);
         // }
-        for(float i = 0; i<=10; i+=10){
-            set_motor_speeds(i, 0);
-            delayMicroseconds(5000000);
-        }
-        for(float i = 0; i<=10; i+=10){
-            set_motor_speeds(0, i);
-            delayMicroseconds(5000000);
-        }
+        // for(float i = 0; i<=10; i+=10){
+        //     set_motor_speeds(i, 0);
+        //     delayMicroseconds(5000000);
+        // }
+        // for(float i = 0; i<=10; i+=10){
+        //     set_motor_speeds(0, i);
+        //     delayMicroseconds(5000000);
+        // }
         // set_motor_speeds(5, 5);
-        delayMicroseconds(5000000);
+        set_motor_speeds(0, 20);
+        delay(3000);
         stop_motors();
-        delay(1000);
+        delay(3000);
+        set_motor_speeds(20, 0);
+        delay(3000);
+        stop_motors();
+        delay(3000);
+#endif
+    }
+
+    void motor_test_3D(){
+#if MOTOR_ON
+        // for(float i = 0; i<=30000; i++){
+        //     set_motor_speeds(i/1000.0, i/1000.0);
+        //     delayMicroseconds(100);
+        // }
+        // for(float i = 0; i<=10; i+=10){
+        //     set_motor_speeds(i, 0);
+        //     delayMicroseconds(5000000);
+        // }
+        // for(float i = 0; i<=10; i+=10){
+        //     set_motor_speeds(0, i);
+        //     delayMicroseconds(5000000);
+        // }
+        // set_motor_speeds(5, 5);
+        set_motor_speeds(0, 20);    delay(3000);
+        stop_motors();              delay(1500);
+        set_motor_speeds(20, 0);    delay(3000);
+        stop_motors();              delay(1500);
+        set_motor_speeds(0, -20);   delay(3000);
+        stop_motors();              delay(1500);
+        set_motor_speeds(-20, 0);   delay(3000);
+        stop_motors();              delay(1500);
 #endif
     }
 

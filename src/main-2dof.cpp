@@ -134,7 +134,7 @@ int main(void)
     debug(tp_estimator.m_ref.y);
     debugln(tp_estimator.m_ref.z);
 
-    tp_control.motor_test();
+    // tp_control.motor_test_3D();
 
     control_start_time = micros();
     controller_on = true;
@@ -203,7 +203,13 @@ int main(void)
         /*
          * Controller Switch: Throw Trigger
          */
-
+        if (digitalRead(8) == LOW){  // Button Pressed
+            // ready = true;
+            controller_on = true;
+            tp_control.stop_motors();
+            delay(3000);
+            control_start_time = micros();
+        }
         // if (digitalRead(8) == LOW){  // Button Pressed
         //     ready = true;
         //     controller_on = false;
@@ -257,15 +263,32 @@ int main(void)
         // static Matrix3f Rd;
         // Rd.from_euler(roll, pitch, yaw);
 
-        if(int((micros() - control_start_time)/1000000.0) > 30){
+        if(int((micros() - control_start_time)/1000000.0) > 60){
             controller_on = false;
         }
 
         if (controller_on){
             // tp_control.angle_mode_controller(tp_estimator.q, tp_estimator.omega, thrust, Rd, true);
             static Vector3f euler;
+            static float p_set = 0, y_set = 1.57;
             tp_estimator.q.to_euler(euler);
-            tp_control.twoDOF_go_to_zero(euler.x, euler.z, true);
+            if(int((micros() - control_start_time)/1000000.0) > 20){
+                p_set = 0;
+                y_set = -1.57;
+            }            
+            if(int((micros() - control_start_time)/1000000.0) > 30){
+                p_set = 0;
+                y_set = 1.57;
+            }
+            if(int((micros() - control_start_time)/1000000.0) > 40){
+                p_set = 0;
+                y_set = -1.57;
+            }
+            if(int((micros() - control_start_time)/1000000.0) > 50){
+                p_set = 0;
+                y_set = 1.57;
+            }
+            tp_control.twoDOF_go_to_simple(euler.x, euler.z, p_set, y_set, true);
         }
         else{
             // tp_control.angle_mode_controller(tp_estimator.q, tp_estimator.omega, thrust, Rd, false);

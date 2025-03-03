@@ -17,80 +17,26 @@
 #define MODE_3D true
 #define ESC_CALIB false
 
-class TP_MOTOR_2DOF{
+class TP_MOTOR_2DOF_SIMPLE{
 protected:
-    uint8_t resolution;
-    float frequency;
-    float total_us, min_us;
-    uint16_t min_ticks, total_ticks, ticks_range, mid_ticks;
     Servo ESC1, ESC3;
+    uint16_t min_throttle = 1000, max_throttle = 2000, neutral_3d = 1460;
+    uint16_t slope = 400;
+    //deadband
     
     void ESC_setup(){
-        // 0 - 32757  -> 15     4577.64 Hz
-        // 0 - 16383  -> 14     9155.27 Hz
-        // 0 - 8191   -> 13     18310.55 Hz
-        // 0 - 4095   -> 12     36621.09 Hz
-        // 0 - 2047   -> 11     73242.19 Hz
 
-        // multishot  --- min_ticks = 1874.99, max_ticks 3749.9, tot: 4095
-        // frequency   = 30000;
-        // resolution  = 12;
-        // min_us      = 12.5;
+        ESC1.attach(ESCPIN1, min_throttle, max_throttle);
+        ESC3.attach(ESCPIN3, min_throttle, max_throttle);
 
-        //  oneshot42
-        // frequency   = 9155.27;    // must be less that 12195 for oneshot42
-        // resolution  = 14;
-        // min_us      = 42.0;
+        ESC1.writeMicroseconds(neutral_3d);
+        ESC3.writeMicroseconds(neutral_3d); // 3 beeps - powering on
 
-        //  oneshot125
-        // frequency   = 1000.0;    // must be less that 12195 for oneshot42
-        // resolution  = 15;
-        // min_us      = 125.0;
-
-        // standard pwm  --- min_ticks: 16056.32   max 32112.64   tot 32757
-        // frequency   = 490.0;
-        frequency   = 50.0;
-        resolution  = 15;
-        min_us      = 1000.0;
-
-        total_ticks = pow(2,resolution);
-        total_us    = 1e6/frequency;
-        min_ticks   = min_us/total_us*total_ticks;
-        ticks_range = min_ticks;
-        mid_ticks   = min_ticks + (int) .46 * ticks_range;
-
-	    digitalWrite(ESCPIN1, LOW);
-	    digitalWrite(ESCPIN3, LOW);
-        pinMode(ESCPIN1, OUTPUT);
-        pinMode(ESCPIN3, OUTPUT);
-
-        // 0us    42us       84us       100us       126us
-        // 0      3440.22    6880.44    8191
-        // 0      1720.32    3440.64    4096
-
-        // analogWriteFrequency(pin, 50);
-
-        // 146484.38
-        // 100us        -> 10000   Hz    
-        // 109.2267us   ->  9155.27Hz     14bit
-        // 126us        ->  7936.5 Hz    
-
-        // analogWriteFrequency(ESCPIN1, frequency);
-        // analogWriteFrequency(ESCPIN3, frequency);
-        // analogWriteResolution(resolution);
-
-
-        ESC1.attach(ESCPIN1, 1000, 2000);
-        ESC3.attach(ESCPIN3, 1000, 2000);
-
-        ESC1.writeMicroseconds(1460);
-        ESC3.writeMicroseconds(1460); // 3 beeps - powering on
-        // set_motor_speeds(0,0);
         delay(1500);
 
-        ESC1.writeMicroseconds(1800);
-        ESC3.writeMicroseconds(1800);  // 1 long low beep - arming sequence begins
-        // set_motor_speeds(20,20);
+        ESC1.writeMicroseconds((neutral_3d+max_throttle)/2);
+        ESC3.writeMicroseconds((neutral_3d+max_throttle)/2);  // 1 long low beep - arming sequence begins
+
         delay(1500);
     #if ESC_CALIB
         // Calibration 
@@ -112,12 +58,8 @@ protected:
         delay(7000);                   // falling beeps - calibration done
         // Calibration Ended
     #endif
-        ESC1.writeMicroseconds(1460);
-        ESC3.writeMicroseconds(1460);   // 1 long high beep (if not callibrating) - arming sequence ends
-        // for (int i=-5; i<=5; i++){
-        //     set_motor_speeds(i/5.0,i/5.0);
-        //     delay(5000);
-        // }
+        ESC1.writeMicroseconds(neutral_3d);
+        ESC3.writeMicroseconds(neutral_3d);   // 1 long high beep (if not callibrating) - arming sequence ends
         
         // set_motor_speeds(0,0);
         delay(5000);
@@ -138,12 +80,12 @@ protected:
         analogWrite(ESCPIN3, min_ticks + (int) m3/100.0*ticks_range);
 
 #else
-        if(m1>10.0)            m1=10.0;
-        if(m3>20.0)            m3=20.0;
-        if(m1<-10.0)           m1=-10.0;
-        if(m3<-20.0)           m3=-20.0;
-        analogWrite(ESCPIN1, mid_ticks + (int) m1/100.0*ticks_range/2);
-        analogWrite(ESCPIN3, mid_ticks + (int) m3/100.0*ticks_range/2);
+        if(m1>30.0)            m1=30.0;
+        if(m3>40.0)            m3=40.0;
+        if(m1<-30.0)           m1=-30.0;
+        if(m3<-40.0)           m3=-40.0;
+        ESC1.writeMicroseconds(neutral_3d + m1/100.0*slope);
+        ESC3.writeMicroseconds(neutral_3d + m3/100.0*slope);
 #endif
         // IMPORTANT Add safety features, to prevent it from flying away
     }
