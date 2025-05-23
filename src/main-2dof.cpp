@@ -4,11 +4,10 @@
 #include "TP_Display.h"
 #include "TP_Serial.h"
 // #include "TP_SD.h"
-#include "TP_StateEstimate\TP_ESTIMATOR.h"
-#include "TP_Control\TP_Control_2DOF.h"
+#include "TP_Estimator/TP_ESTIMATOR.h"
+#include "TP_Controller/TP_Control_2DOF.h"
 
 #include "TP_RC.h"
-
 
 #include "SD.h"
 
@@ -29,7 +28,8 @@
 #define serial_type     SERIAL_DEBUG
 #define sd_log_type     SD_LOG_OFF
 
-#define MOTOR_ON
+// #define MOTOR_ON
+
 #if serial_type == SERIAL_DEBUG
     #define debug(x) Serial.print(x); Serial.print(" ");
     #define debugln(x) Serial.println(x)

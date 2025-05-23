@@ -6,11 +6,11 @@
 // #include "matrixN.h"
 // #include "AP_Math.h"
 
-#define GYRO_ONLY true
+// #define GYRO_ONLY true
 
 // Thanks to: https://github.com/PBernalPolo/test_MKF.git
 
-class TP_MUKF2
+class TP_MUKF
 {
 private:
 protected:
@@ -26,14 +26,10 @@ protected:
     double Qw;
     // covariance matrix of the acceleration noise (g^2)
     double Qa;
-    //
-    double Qm;
     // covariance matrix of the angular velocity measurement noise (rad^2/s^2)
     double Rw;
     // covariance matrix of the acceleration measurement noise (g^2)
     double Ra;
-    //
-    double Rm;
     // use or not the chart update
     boolean chartUpdate = true;
     double W0;
@@ -46,8 +42,8 @@ public:
     // covariance matrix
     double P[36];
     // double K[36];
-    Vector3d a_ref, m_ref;
-    TP_MUKF2(){
+    Vector3d v_ref;
+    TP_MUKF(){
         q[0] = 1.0;   q[1] = 0.0;   q[2] = 0.0;   q[3] = 0.0;
         // it is necessary to set an angular velocity different from 0.0 to break the symmetry
         // otherwise, the MUKF could not converge (especially when we apply the "reset operation" with the RV chart)
@@ -59,10 +55,8 @@ public:
         
         Qw = 1.0e1;
         Qa = 1.0e-2;
-        Qm = 1.0e-2;
         Rw = 1.0e-3; // Gyro Measure Noise
         Ra = 1.0e-3;
-        Rm = 1.0e-3;
 
         W0 = 1.0/25.0;
 
@@ -82,53 +76,57 @@ public:
         chartUpdate = chartUpdateIn;
     }
 
-    void init_estimator(const Vector3f a_r, const Vector3f m_r){
-        a_ref = a_r.todouble();
-        // m_ref = m_r.todouble();
-        m_ref = ((a_r%m_r).normalized()%a_r).todouble();
+    void init_estimator(const Vector3f v_r){
+        // R[0] = R[1] = R[2] = sq(mpu.std_dev_accel);
+        // R[3] = R[4] = R[5] = sq(mag.std_dev_mag);
+        // sigma_gyro = mpu.std_dev_gyro;
+        // q[0] = 1.0;
+        // q[1] = 0.0;
+        // q[2] = 0.0;
+        // q[3] = 0.0;
+        v_ref = v_r.todouble();
     }
-    // Method: updateIMU
-    // method used to update the state information through an IMU measurement
-    // inputs:
-    //  am: measured acceleration (g)
-    //  wm: measured angular velocity (rad/s)
-    //  dt: time step from the last update (s)
-    // outputs:
-    void estimate_attitude(Vector3f mag, Vector3f acc, Vector3f gyro, const double dt){
+     // Method: updateIMU
+  // method used to update the state information through an IMU measurement
+  // inputs:
+  //  am: measured acceleration (g)
+  //  wm: measured angular velocity (rad/s)
+  //  dt: time step from the last update (s)
+  // outputs:
+    void estimate_attitude(Vector3f v, Vector3f gyro, const double dt){
         // ********************** Augmented Covariance Matrix *********************************
-        static double Pe[225];  // Pe is 15*15
-        for(int k=0; k<225; k++)        Pe[k] = 0.0;
+        double Pe[144];  // Pe is 12x12
+        for(int k=0; k<144; k++)        Pe[k] = 0.0;            // 12, 24, 36, 48, 60, 72,... 84, 96, 108,... 120, 132, 144
         for(int i=0; i<6; i++) 
-            for(int j=0; j<6; j++)      Pe[i+j*15] = P[i+j*6];  // 15, 30, 45, 60, 75, 90,... 105, 120, 135,... 150 165, 180,... , 195, 210, 225
-        for(int i=0; i<3; i++)          Pe[96 +i+i*15] = Qw;    // 90  +6
-        for(int i=0; i<3; i++)          Pe[144+i+i*15] = Qa;    // 135 +9
-        for(int i=0; i<3; i++)          Pe[192+i+i*15] = Qm;    // 180 +12
+            for(int j=0; j<6; j++)      Pe[i+j*12] = P[i+j*6];  
+        for(int i=0; i<3; i++)          Pe[78+i+i*12] = Qw;     // 72+6
+        for(int i=0; i<3; i++)          Pe[117+i+i*12] = Qa;    // 108+9
 
 
         // ************************** Generate Sigma Points *************************************
 
         // we get the square-root of the matrix using the Cholesky factorization
-        Cholesky( Pe , 15 );
+        Cholesky( Pe , 12 );
 
         // Set Weights (W0 must be in [0,1])
-        double Wi = (1.0-W0)/(2.0*15);
+        double Wi = (1.0-W0)/(2.0*12);
 
         //the factor for the square root, so P = sum(W_k*sigma_k)
         double alpha = 1.0/sqrt(2.0*Wi);
-        for(int k=0; k<225; k++) 
+        for(int k=0; k<144; k++) 
             Pe[k] *= alpha;
 
         // we define and initialize the sigma points (state and measure)
-        // 1 + 2*15 = 31 sigma points;            4+3+3+3 = 16
-        //            31 measurement predictions; 3+3+3   = 9
-        double X[31][16];
-        double Y[31][9];
+        // 25 = 1 + 2*12  sigma points;  13 = 4+3+3 : quaternion, disturbance in w and a
+        // 25 measurement predictions ;  6  = 3+3   : w_p and a_p 
+        double X[25][13];
+        double Y[25][6];
         GenerateSigmaPoints(X, Y, Pe);
 
         // ********************************* Prediction *****************************************
 
         // we compute the predictions
-        for(int j=0; j<31; j++){
+        for(int j=0; j<25; j++){
             statePrediction( X[j] , dt );
             // we make sure that all quaternions are in the same hemisphere
             double prod = 0.0;
@@ -138,85 +136,76 @@ public:
             }
             //if( X[j][0] < 0.0 ) for(int i=0; i<4; i++) X[j][i] = -X[j][i];  // this is an alternative
 
-            IMU_MeasurementPrediction( Y[j] , X[j] , a_ref, m_ref);
+            IMU_MeasurementPrediction( Y[j] , X[j] , v_ref);
         }
 
         // ***************************************  Compute the Mean  *************************************************
         double xmean[7];
-        double ymean[9];
+        double ymean[6];
         for(int i=0; i<7; i++) xmean[i] = W0*X[0][i];
-        for(int i=0; i<9; i++) ymean[i] = W0*Y[0][i];
-        for(int j=1; j<31; j++){
+        for(int i=0; i<6; i++) ymean[i] = W0*Y[0][i];
+        for(int j=1; j<25; j++){
             for(int i=0; i<7; i++) xmean[i] += Wi*X[j][i];
-            for(int i=0; i<9; i++) ymean[i] += Wi*Y[j][i];
+            for(int i=0; i<6; i++) ymean[i] += Wi*Y[j][i];
         }
         double qmeanNorm = sqrt( xmean[0]*xmean[0] + xmean[1]*xmean[1] + xmean[2]*xmean[2] + xmean[3]*xmean[3] );
         for(int i=0; i<4; i++) xmean[i] /= qmeanNorm;
 
         // *******************************  Compute the covariance matrices  *******************************************
         double Pxx[6*6];
-        double Pxy[6*9];
-        double Pyy[9*9];
+        double Pxy[6*6];
+        double Pyy[6*6];
         double dX [6];
-        double dY[9];
+        double dY[6];
         //   first we add the 0 contribution
         fM2C( dX , xmean , X[0] );
         for(int i=3; i<6; i++) 
             dX[i] = X[0][i+1]-xmean[i+1];
-        for(int i=0; i<9; i++) 
+        for(int i=0; i<6; i++) 
             dY[i] = Y[0][i]-ymean[i];
-
-        for(int i=0; i<6; i++)
-            for(int j=0; j<6; j++)      Pxx[i+j*6] = W0*dX[i]*dX[j];
-        for(int i=0; i<6; i++)
-            for(int j=0; j<9; j++)      Pxy[i*9+j] = W0*dX[i]*dY[j];
-        for(int i=0; i<9; i++)
-            for(int j=0; j<9; j++)      Pyy[i+j*9] = W0*dY[i]*dY[j];
-        
+        for(int i=0; i<6; i++){
+            for(int j=0; j<6; j++){
+                Pxx[i+j*6] = W0*dX[i]*dX[j];
+                Pxy[i*6+j] = W0*dX[i]*dY[j];
+                Pyy[i+j*6] = W0*dY[i]*dY[j];
+            }
+        }
         //   then the rest
-        for(int k=1; k<31; k++){
+        for(int k=1; k<25; k++){
             fM2C( dX , xmean , X[k] );
             for(int i=3; i<6; i++) 
                 dX[i] = X[k][i+1]-xmean[i+1];
-            for(int i=0; i<9; i++) 
+            for(int i=0; i<6; i++) 
                 dY[i] = Y[k][i]-ymean[i];
-
-            for(int i=0; i<6; i++)
-                for(int j=0; j<6; j++)      Pxx[i+j*6] = W0*dX[i]*dX[j];
-            for(int i=0; i<6; i++)
-                for(int j=0; j<9; j++)      Pxy[i*9+j] = W0*dX[i]*dY[j];
-            for(int i=0; i<9; i++)
-                for(int j=0; j<9; j++)      Pyy[i+j*9] = W0*dY[i]*dY[j];
+            for(int i=0; i<6; i++){
+                for(int j=0; j<6; j++){
+                    Pxx[i+j*6] += Wi*dX[i]*dX[j];
+                    Pxy[i*6+j] += Wi*dX[i]*dY[j];
+                    Pyy[i+j*6] += Wi*dY[i]*dY[j];
+                }
+            }
         }
         //   finally we add the noise (the linear part)
         for(int i=0; i<3; i++){                                                     /// Modified
-            Pyy[i+i*9]          += Rm;
-            Pyy[i+3+(i+3)*9]    += Ra;
-            Pyy[i+6+(i+6)*9]    += Rw;
+            Pyy[i+i*6] += Ra;
+            Pyy[i+3+(i+3)*6] += Rw;
         }
 
         // ******************************************* Update ***************************************************
         // we save Pyy in other matrix because solve() will overwrite it
-        // Changed P to Pyy_temp
-        double Pyy_temp[9*9];
-        for(int k=0; k<36; k++) Pyy_temp[k] = Pyy[k];
+        for(int k=0; k<36; k++) P[k] = Pyy[k];
 
         // now we can compute the gain ( K*Pyy = Pxy )
-        // solve(Pyy_temp , Pxy );  // now K is stored in Pxy
-        compute_K(Pyy_temp , Pxy );  // now K is stored in Pxy
+        solve(P , Pxy );  // now K is stored in Pxy
 
-        mag = (acc%mag).normalized()%acc;
         // and update the state in the chart
-        double dy[] = { mag[0] -ymean[0] , mag[1] -ymean[1] , mag[2] -ymean[2] , 
-                        acc[0] -ymean[3] , acc[1] -ymean[4] , acc[2] -ymean[5] , 
-                        gyro[0]-ymean[6] , gyro[1]-ymean[7] , gyro[2]-ymean[8] };
-
+        double dy[] = { v[0]-ymean[0] , v[1]-ymean[1] , v[2]-ymean[2] , gyro[0]-ymean[3] , gyro[1]-ymean[4] , gyro[2]-ymean[5] };
 
         double dx[6]; // dx = Kn*(zn-zp)
         for(int i=0; i<6; i++){
             double sum = 0.0;
-            for(int j=0; j<9; j++) 
-                sum += Pxy[i*9+j]*dy[j];
+            for(int j=0; j<6; j++) 
+                sum += Pxy[i*6+j]*dy[j];
             dx[i] = sum;
         }
 
@@ -234,17 +223,17 @@ public:
         w[2] = xmean[6] + dx[5];
 
         // the covariance matrix is updated in the chart centered in q0 ( P = Pxx - K*Pyy*K^T )
-        for(int i=0; i<9; i++){
+        for(int i=0; i<6; i++){
             for(int j=0; j<6; j++){
             double sum = 0.0;
-            for(int k=0; k<9; k++) sum += Pyy[i+k*9]*Pxy[j*9+k];
-                Pyy_temp[i+j*9] = sum;
+            for(int k=0; k<6; k++) sum += Pyy[i+k*6]*Pxy[j*6+k];
+                P[i+j*6] = sum;
             }
         }
         for(int i=0; i<6; i++){
             for(int j=0; j<6; j++){
             double sum = 0.0;
-            for(int k=0; k<9; k++) sum += Pxy[i*9+k]*Pyy_temp[k+j*9];
+            for(int k=0; k<6; k++) sum += Pxy[i*6+k]*P[k+j*6];
             Pxx[i+j*6] -= sum;
             }
         }
@@ -264,16 +253,16 @@ public:
         return;
     }
 
-    void GenerateSigmaPoints( double X[31][16], double Y[31][9], double* Pe){
-        for(int j=0; j<31; j++)
-            for(int i=0; i<16; i++) X[j][i] = 0.0;
-        for(int j=0; j<31; j++)
-            for(int i=0; i<16; i++) Y[j][i] = 0.0;
+    void GenerateSigmaPoints( double X[25][13], double Y[25][6], double* Pe){
+        for(int j=0; j<25; j++)
+            for(int i=0; i<13; i++) X[j][i] = 0.0;
+        for(int j=0; j<25; j++)
+            for(int i=0; i<6; i++) Y[j][i] = 0.0;
 
         // first we set the mean value
         for(int i=0; i<4; i++) X[0][i] = q[i]; // quaternion! not chart point.... ????
         for(int i=0; i<3; i++) X[0][i+4] = w[i];
-        for(int i=0; i<9; i++) X[0][i+7] = 0.0;     /// Isnt this not correct??
+        for(int i=0; i<6; i++) X[0][i+7] = 0.0;
 
         //???? we can test if the Chart update is good or not by uncommenting the next lines
         if( !chartUpdate ){
@@ -282,28 +271,28 @@ public:
         }
 
         // second we generate the +sigma points from the P matrix
-        for(int j=0; j<15; j++){
+        for(int j=0; j<12; j++){
             // we do this because P is expressed in the q0 chart, but we need to
             // express it in the q chart for the next time step
             //   first we compute the point in the chart
-            double eP[] = { e[0]+Pe[0+j*15] , e[1]+Pe[1+j*15] , e[2]+Pe[2+j*15] };
+            double eP[] = { e[0]+Pe[0+j*12] , e[1]+Pe[1+j*12] , e[2]+Pe[2+j*12] };
             //   we get the point in the manifold
             fC2M( X[j+1] , q0 , eP );
             // we set the angular velocity
-            for(int i=3; i<6; i++) X[j+1][i+1] = w[i-3] + Pe[i+j*15];
-            for(int i=6; i<15; i++) X[j+1][i+1] = Pe[i+j*15];
+            for(int i=3; i<6; i++) X[j+1][i+1] = w[i-3] + Pe[i+j*12];
+            for(int i=6; i<12; i++) X[j+1][i+1] = Pe[i+j*12];
         }
         // third we generate the -sigma points from the P matrix
-        for(int j=0; j<15; j++){
+        for(int j=0; j<12; j++){
             // we do this because P is expressed in the q0 chart, but we need to
             // express it in the q chart for the next time step
             //   first we compute the point in the chart
-            double eP[] = { e[0]-Pe[0+j*15] , e[1]-Pe[1+j*15] , e[2]-Pe[2+j*15] };
+            double eP[] = { e[0]-Pe[0+j*12] , e[1]-Pe[1+j*12] , e[2]-Pe[2+j*12] };
             //   we get the point in the manifold
-            fC2M( X[j+16] , q0 , eP );
+            fC2M( X[j+13] , q0 , eP );
             // we set the angular velocity
-            for(int i=3; i<6; i++) X[j+16][i+1] = w[i-3] - Pe[i+j*15];
-            for(int i=6; i<15; i++) X[j+16][i+1] = -Pe[i+j*15];
+            for(int i=3; i<6; i++) X[j+13][i+1] = w[i-3] - Pe[i+j*12];
+            for(int i=6; i<12; i++) X[j+13][i+1] = -Pe[i+j*12];
         }
     }
 
@@ -443,7 +432,7 @@ public:
     //  xp: state for which the measure is to be predicted
     // outputs:
     //  yp: predicted measurement
-    void IMU_MeasurementPrediction( double* y , double* x , Vector3d a_ref, Vector3d m_ref){
+    void IMU_MeasurementPrediction( double* y , double* x , Vector3d v_ref){
         // the predicted acceleration measurement will be the gravity vector measured
         // in the sensor frame: g = (R^T)*[a-(0,0,-1)]
         //  first we compute the rotation matrix
@@ -467,25 +456,18 @@ public:
         static QuaternionD q;
         for(int i=0; i<4; i++) q[i] = x[i];
 
-        static Vector3d ag, mg;
+        static Vector3d ag;
         ag.set(x[10], x[11], x[12]);
-        mg.set(x[13], x[14], x[15]);
-        ag += a_ref;
-        mg += m_ref;
+        ag += v_ref;
         q.inverse().earth_to_body(ag);
-        q.inverse().earth_to_body(mg);
 
-        y[0] = mg[0];
-        y[1] = mg[1];
-        y[2] = mg[2];
-
-        y[3] = ag[0];
-        y[4] = ag[1];
-        y[5] = ag[2];
+        y[0] = ag[0];
+        y[1] = ag[1];
+        y[2] = ag[2];
         // the predicted measurement for the angular velocity will be itself
-        y[6] = x[4];
-        y[7] = x[5];
-        y[8] = x[6];
+        y[3] = x[4];
+        y[4] = x[5];
+        y[5] = x[6];
 
         return;
     }
@@ -525,40 +507,4 @@ public:
         return;
     }
 
-    void compute_K( double* S , double* M ){
-        // we first compute the Cholesky decomposition for transform the system from  K*S = M  into K*L*L' = M
-        Cholesky( S , 9);
-        // for(int i =0; i<9; i++){
-        //     Serial.print(S[i*10]);
-        //     Serial.print(" ");
-        // }
-        double y[9];
-        // then we take each pair of rows of K and M independently
-        for(int i=0; i<6; i++){
-            // first we solve (y*L' = M)
-            for(int j=0; j<9; j++){
-                double sum = 0.0;
-                for(int k=0; k<j; k++){
-                    sum += y[k]*S[j+k*9];
-                }
-                y[j] = ( M[i*9+j] - sum )/S[j*10];
-            }
-            // now we solve (Ki*L = y)
-            for(int j=8; j>-1; j--){
-                double sum = 0.0;
-                for(int k=j+1; k<9; k++){
-                    sum += M[i*9+k]*S[k+j*9];
-                }
-                M[i*9+j] = ( y[j] - sum )/S[j*10];
-            }
-        }
-        // for(int i=0; i<54; i++){
-        //     K[i]=M[i];
-            
-        //     // Serial.print(K[i]);
-        //     // Serial.print(" ");
-        // }
-            
-        return;
-    }
 };

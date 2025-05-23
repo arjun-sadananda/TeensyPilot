@@ -6,7 +6,7 @@
 // #include "matrixN.h"
 // #include "AP_Math.h"
 
-#define GYRO_ONLY true
+// #define GYRO_ONLY true
 
 // Thanks to: https://github.com/PBernalPolo/test_MKF.git
 

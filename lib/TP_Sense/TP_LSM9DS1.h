@@ -1,10 +1,11 @@
 #pragma once
 
-#include "vector3.h"
-#include "matrix3.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
+
+#include "vector3.h"
+#include "matrix3.h"
 // #include <TP_Sense/Adafruit_LSM9DS1_Library/Adafruit_LSM9DS1.h>
 // #include <TP_Sense/Adafruit_Unified_Sensor/Adafruit_Sensor.h>  // not used in this demo but required!
 

@@ -61,15 +61,14 @@
 #include <float.h>      // FLT_EPSILON
 
 #include "rotations.h"
-#include "vector2.h"
 #include "matrix3.h"
 
 
 template <typename T>
 class Matrix3;
 
-template <typename T>
-class Vector2;
+// template <typename T>
+// class Vector2;
 
 template <typename T>
 class Vector3
@@ -88,12 +87,6 @@ public:
     constexpr Vector3<T>(const T x0, const T y0, const T z0)
         : x(x0)
         , y(y0)
-        , z(z0) {}
-
-    //Create a Vector3 from a Vector2 with z
-    constexpr Vector3<T>(const Vector2<T> &v0, const T z0)
-        : x(v0.x)
-        , y(v0.y)
         , z(z0) {}
 
     void set(const T x1, const T y1, const T z1){

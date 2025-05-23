@@ -1,8 +1,9 @@
 #pragma once
 
-#include "vector3.h"
 #include <Arduino.h>
 #include <Wire.h>
+
+#include "vector3.h"
 
 #define MPU_ADDR 0x68
 

@@ -3,7 +3,7 @@
 // #include<AP_Math.h>
 
 // #include "TP_Motor\TP_Motor_2DOF.h"
-#include "TP_Motor\TP_Motor_2DOF_simple.h"
+#include "TP_Motor_2DOF_simple.h"
 
 #define MOTOR_ON true
 
@@ -37,8 +37,8 @@ public:
         //      18.9     1.98     7.48       1.53      7.03      0.77
         //      -2.22    19.4     -0.45      11.9      -0.77     7.03
         // x =  p        y        pd         yd        pi        yi
-        float P_avg = 10;
-        float Y_avg = 5;
+        // float P_avg = 10;
+        // float Y_avg = 5;
         static float dt, e_pd, e_yd;
         static float e_p_prev, e_y_prev, t_prev;
         static float kp_pp = 8 , kp_py = -2, kd_pp =0,               kI_p = 1;

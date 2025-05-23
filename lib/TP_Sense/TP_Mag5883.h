@@ -1,9 +1,10 @@
 #pragma once
 
-#include "vector3.h"
-#include "matrix3.h"
 #include <Arduino.h>
 #include <Wire.h>
+
+#include "vector3.h"
+#include "matrix3.h"
 
 #define MAG_ADDR 0x0D //byte
 #define MAG_CONTROL_REG_1 0x09

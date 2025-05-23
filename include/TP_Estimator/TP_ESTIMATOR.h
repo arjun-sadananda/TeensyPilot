@@ -1,26 +1,27 @@
 #pragma once
 
-#include "vector3.h"
-#include "quaternion.h"
-#include "TP_Sense\TP_MPU6050.h"
-#include "TP_Sense\TP_Mag5883.h"
-#include "TP_Sense\TP_BMP280.h"
-
-#include "TP_Sense\TP_LSM9DS1.h"
 
 #include <Arduino.h>
 #include "Wire.h"
+#include "vector3.h"
+#include "quaternion.h"
+#include "TP_MPU6050.h"
+#include "TP_Mag5883.h"
+#include "TP_BMP280.h"
+
+#include "TP_LSM9DS1.h"
+
 // #include "AP_Math.h"
 
 // #include "adaptnotch/adaptnotch.h"
 
-#include "TP_StateEstimate\TP_BKF.h"
-#include "TP_StateEstimate\TP_TRIAD.h"
-#include "TP_StateEstimate\TP_EKF.h"
-#include "TP_StateEstimate\TP_MEKF.h"
-#include "TP_StateEstimate\TP_MEKF2.h"
-#include "TP_StateEstimate\TP_MUKF.h"
-#include "TP_StateEstimate\TP_MUKF2.h"
+#include "TP_BKF.h"
+#include "TP_TRIAD.h"
+#include "TP_EKF.h"
+#include "TP_MEKF.h"
+#include "TP_MEKF2.h"
+#include "TP_MUKF.h"
+#include "TP_MUKF2.h"
 
 // BKF, TRIAD, EKF, MEKF_acc, MEKF_mag, 
 // MEKF2, MEKF2_TRIAD, ALL_ESTIMATORS, MEKF2_COMPARE

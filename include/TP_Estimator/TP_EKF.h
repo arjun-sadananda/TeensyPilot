@@ -8,7 +8,7 @@
 
 
 
-#define GYRO_ONLY true
+// #define GYRO_ONLY true
 
 struct Vector4
 {
