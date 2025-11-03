@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+
+#
+# https://github.com/crsf-wg/crsf/wiki
+# This simple python parser implements a loose CRSF implementation. 
+# Strict mode would require the packet start with CRSF_SYNC (0xC8) 
+# but this ignores that byte and processes any packet that's 4-64 bytes long 
+# and the CRC checks out. This is similar to the parsers in EdgeTX (2.9), iNav (7.0), and Betaflight (4.5).
+
+# Note the default baud rate is arbitrarily chosen for testing. 
+# Use 420k/416666 for receivers, or 400k+ etc for transmitters. 
+# Half-duplex inverted (S.PORT / external module protocol) is not supported.
+
+# Add the --tx option to also send CHANNELS_PACKED at 50Hz. The channel values will all be 1500us.
+
 import serial
 import time
 import argparse
@@ -193,7 +207,7 @@ def controller(e_x, e_y):
 parser = argparse.ArgumentParser()
 parser.add_argument('-P', '--port', default='COM19', required=False)
 parser.add_argument('-b', '--baud', default=921600, required=False)
-parser.add_argument('-t', '--tx', required=False, default=False, action='store_true',
+parser.add_argument('-t', '--tx', required=False, default=True, action='store_true',
                     help='Enable sending CHANNELS_PACKED every 20ms (all channels 1500us)')
 args = parser.parse_args()
 
@@ -229,7 +243,7 @@ with serial.Serial(args.port, args.baud, timeout=2) as ser:
         # print(f"Error values are: e_x: {e_x}, e_y: {e_y}")
         if ser.in_waiting > 0:
             input.extend(ser.read(ser.in_waiting))
-            print(f"Read {len(input)} bytes")
+            
         else:
             if args.tx:
                 ser.write(channelsCrsfToChannelsPacket([roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]))
