@@ -168,9 +168,10 @@ CAMERA_ANGLE = 25.0  # degrees
 FRAME_WIDTH = 1920
 FRAME_HEIGHT = 1080
 # Ideally Use LOS instead of pixel errors directly
+e_y_integral = 0.0
 
 def controller(e_x, e_y):
-    global e_x_prev, e_y_prev, prev_time
+    global e_x_prev, e_y_prev, prev_time, e_y_integral
 
     dt = time.time() - prev_time  # Time step, adjust as needed
     prev_time = time.time()
@@ -180,28 +181,35 @@ def controller(e_x, e_y):
 
     e_x_prev = e_x
     e_y_prev = e_y
-    
+
+    if abs(e_y) < .25:
+        e_y_integral += e_y * dt  # Simple integral term, could be accumulated over time
+    else:
+        e_y_integral = 0.0  # Reset integral if error is large
     Kp_roll     = RC_STICK_RANGE*1
     Kp_yaw_rate = RC_STICK_RANGE*1
     Kp_pitch    = RC_STICK_RANGE*1
     Kd_roll     = 0.0
     Kd_yaw_rate = 0.0
     Kd_pitch    = 0.0
+    Ki_throttle = RC_STICK_RANGE*1
 
 
+    HOVER_THROTTLE = RC_STICK_MIN + (RC_STICK_RANGE * 0.45)  # Adjust as needed
     PITCH_BIAS = RC_STICK_RANGE/2 * (CAMERA_ANGLE / ANGLE_LIMIT)
 
     # Total control outputs
     u_roll      = RC_STICK_MID + Kp_roll * e_x      + Kd_roll * d_e_x
     u_yaw_rate  = RC_STICK_MID + Kp_yaw_rate * e_x  + Kd_yaw_rate * d_e_x
     u_pitch     = RC_STICK_MID + Kp_pitch * e_y     + Kd_pitch * d_e_y      + PITCH_BIAS
-
+    u_throttle  = HOVER_THROTTLE - Kp_pitch * e_y   + Kd_pitch * d_e_y    - Ki_throttle * e_y_integral
     # Clip to valid range
     u_roll      = max(RC_STICK_MIN, min(RC_STICK_MAX, int(u_roll)))
     u_yaw_rate  = max(RC_STICK_MIN, min(RC_STICK_MAX, int(u_yaw_rate)))
     u_pitch     = max(RC_STICK_MIN, min(RC_STICK_MAX, int(u_pitch)))
+    u_throttle  = max(RC_STICK_MIN, min(RC_STICK_MAX, int(u_throttle)))
 
-    return u_roll, u_pitch, u_yaw_rate
+    return u_roll, u_pitch, u_throttle, u_yaw_rate
 
 
 parser = argparse.ArgumentParser()
@@ -237,8 +245,8 @@ with serial.Serial(args.port, args.baud, timeout=2) as ser:
         e_y = (y - FRAME_HEIGHT / 2)
         e_y /= (FRAME_HEIGHT / 2)
 
-        roll, pitch, yaw_rate = controller(e_x, e_y)
-        throttle = 992
+        roll, pitch, throttle, yaw_rate = controller(e_x, e_y)
+
         # print(f"Mouse cursor is at X: {x}, Y: {y}")
         # print(f"Error values are: e_x: {e_x}, e_y: {e_y}")
         if ser.in_waiting > 0:
