@@ -186,23 +186,29 @@ def controller(e_x, e_y):
         e_y_integral += e_y * dt  # Simple integral term, could be accumulated over time
     else:
         e_y_integral = 0.0  # Reset integral if error is large
-    Kp_roll     = RC_STICK_RANGE*1
-    Kp_yaw_rate = RC_STICK_RANGE*1
-    Kp_pitch    = RC_STICK_RANGE*1
+    Kp_roll     = RC_STICK_RANGE*.3
+    Kp_yaw_rate = RC_STICK_RANGE*.3
+    Kp_pitch    = RC_STICK_RANGE*.3
+    Kp_throttle = RC_STICK_RANGE*2
     Kd_roll     = 0.0
     Kd_yaw_rate = 0.0
     Kd_pitch    = 0.0
+    Kd_throttle = 0.0
     Ki_throttle = RC_STICK_RANGE*1
+    # convert e_y to angle (use LOS)
 
-
-    HOVER_THROTTLE = RC_STICK_MIN + (RC_STICK_RANGE * 0.45)  # Adjust as needed
     PITCH_BIAS = RC_STICK_RANGE/2 * (CAMERA_ANGLE / ANGLE_LIMIT)
 
     # Total control outputs
-    u_roll      = RC_STICK_MID + Kp_roll * e_x      + Kd_roll * d_e_x
-    u_yaw_rate  = RC_STICK_MID + Kp_yaw_rate * e_x  + Kd_yaw_rate * d_e_x
-    u_pitch     = RC_STICK_MID + Kp_pitch * e_y     + Kd_pitch * d_e_y      + PITCH_BIAS
-    u_throttle  = HOVER_THROTTLE - Kp_pitch * e_y   + Kd_pitch * d_e_y    - Ki_throttle * e_y_integral
+    u_roll     = RC_STICK_MID + Kp_roll * e_x     + Kd_roll * d_e_x
+    u_yaw_rate = RC_STICK_MID + Kp_yaw_rate * e_x + Kd_yaw_rate * d_e_x
+    u_pitch    = RC_STICK_MID + Kp_pitch * e_y    + Kd_pitch * d_e_y    + PITCH_BIAS
+
+    # replace pitch with tilt angle for throttle feedforward
+    pitch = ANGLE_LIMIT * (u_pitch - RC_STICK_MID) / (RC_STICK_RANGE/2)
+    throttle_ff = RC_STICK_MIN + (RC_STICK_RANGE * HOVER_THROTTLE_PC / math.cos(math.radians(pitch)))  # Adjust as needed
+    u_throttle  = throttle_ff - Kp_throttle * e_y   + Kd_throttle * d_e_y    #- Ki_throttle * e_y_integral
+    
     # Clip to valid range
     u_roll      = max(RC_STICK_MIN, min(RC_STICK_MAX, int(u_roll)))
     u_yaw_rate  = max(RC_STICK_MIN, min(RC_STICK_MAX, int(u_yaw_rate)))
