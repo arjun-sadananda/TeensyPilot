@@ -25,7 +25,8 @@ import math
 
 ###############################
 # CRSF Variables and Functions
-######################
+###############################
+
 CRSF_SYNC = 0xC8
 
 class PacketsTypes(IntEnum):
@@ -153,9 +154,9 @@ def handleCrsfPacket(ptype, data):
         packet = ' '.join(map(hex, data))
         print(f"Unknown 0x{ptype:02x}: {packet}")
 
-########################
+###################################
 # Control parameters and Functions
-########################
+###################################
 
 e_x_prev = 0.0
 e_y_prev = 0.0
@@ -275,7 +276,7 @@ args = parser.parse_args()
 with serial.Serial(args.port, args.baud, timeout=2) as ser, mss.mss() as sct:
     input = bytearray()
     # Capture a monitor:
-    monitor = sct.monitors[2]
+    monitor = sct.monitors[1]
     # 1920 1080 half resolution 960 540
     while True:
         
