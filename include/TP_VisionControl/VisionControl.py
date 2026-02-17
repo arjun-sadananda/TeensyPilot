@@ -15,22 +15,40 @@
 
 import time
 import argparse
-import math
-
-import cv2
-import numpy as np
-import mss
-
-import pygame
-import serial
 from enum import IntEnum
+
+import math
+import numpy as np
+
+import serial
+import pygame
+import mss
+import cv2
 
 from ultralytics import YOLO
 import torch
 
-###############################
-# CRSF Variables and Functions
-###############################
+"""
+
+Shared data
+
+Frame
+Anotation on?
+Controller on?
+"""
+
+"""
+# 
+# CRSF 
+#
+# https://github.com/crsf-wg/crsf/wiki
+# This simple python parser implements a loose CRSF implementation. 
+# Strict mode would require the packet start with CRSF_SYNC (0xC8) 
+# but this ignores that byte and processes any packet that's 
+# 4-64 bytes long and the CRC checks out. This is similar to the parsers in EdgeTX (2.9), iNav (7.0), and Betaflight (4.5).
+#
+# This CRSF packet is sent to ELRS TX module (Radiomaster Nomad)
+"""
 
 CRSF_SYNC = 0xC8
 
@@ -159,63 +177,12 @@ def handleCrsfPacket(ptype, data):
         packet = ' '.join(map(hex, data))
         print(f"Unknown 0x{ptype:02x}: {packet}")
 
-###################################
-# Control parameters and Functions
-###################################
 
-c_x = 0.0
-c_y = 0.0
-e_x_prev = 0.0
-e_y_prev = 0.0
-prev_time = time.time()
-
-# 1811+172 = 1639/2 = 992
-# 1811-992 = 819
-RC_STICK_MIN = 172
-RC_STICK_MAX = 1811
-RC_STICK_RANGE = RC_STICK_MAX - RC_STICK_MIN
-RC_STICK_MID = (RC_STICK_MIN + RC_STICK_MAX) // 2
-
-ANGLE_LIMIT = 55.0  # degrees
-CAMERA_ANGLE = 25.0  # degrees
-# 848, 678
-FRAME_WIDTH = 1920/2
-FRAME_HEIGHT = 1080/2
-# Ideally Use LOS instead of pixel errors directly
-e_y_integral = 0.0
-
-HOVER_THROTTLE_PC = 0.25  # Portion of throttle range to hover at level flight
-
-
-
-
-
-
-
-###############################
-# Joystick Input Setup
-###############################
-
-JOY_DEVICE_ID = 0  # EdgeTX radio joystick ID
-
-pygame.init()
-pygame.joystick.init()
-if pygame.joystick.get_count() == 0:
-    print("No EdgeTX radio found. Ensure it is in USB Joystick mode.")
-    exit()
-
-radio = pygame.joystick.Joystick(JOY_DEVICE_ID)
-radio.init()
-print(f"Connected to: {radio.get_name()}")
-
-###############################
 # CRSF Serial Setup
-###############################
 
 PORT = 'COM19'
 BAUD = 921600
 TX_ENABLED = True
-
 CRSF_initialized = False
 try:
     ser = serial.Serial(port=PORT, baudrate=BAUD, timeout=2)
@@ -225,9 +192,36 @@ except Exception as e:
     CRSF_initialized = False
 # help='Enable sending CHANNELS_PACKED every 20ms (all channels 1500us)'
 
-###############################
-# Camera Setup
-###############################
+""" 
+#
+#  Joystick Input Setup
+#
+#  This uses pygame to read the EdgeTX radio in USB Joystick mode.
+#  
+#  4 channels for the 4 sticks - forwarded to TX in manual mode and 
+#  1 button                    - for the AUTO mode toggle.
+#
+"""
+
+JOY_DEVICE_ID = 0  # EdgeTX radio joystick ID
+
+pygame.init()
+pygame.joystick.init()
+if pygame.joystick.get_count() == 0:
+    print("No EdgeTX radio found. Ensure it is in USB Joystick mode.")
+    exit()
+radio = pygame.joystick.Joystick(JOY_DEVICE_ID)
+radio.init()
+print(f"Connected to: {radio.get_name()}")
+
+"""
+# 
+#  Frame Input Setup
+# 
+"""
+
+FRAME_WIDTH = 1920
+FRAME_HEIGHT = 1080
 
 SCREEN_ID = 2       # Set to None to use camera instead of screen capture
 CAMERA_ID = None    # Set to None to use screen capture instead of camera
@@ -242,14 +236,23 @@ elif SCREEN_ID is not None:
 frame = None
 annotated_frame = None
 
-###############################
-# Optical Flow Point Tracking
-###############################
-# Global variables to store the selected points
-p0 = None
-target_point = [    FRAME_WIDTH / 2, FRAME_HEIGHT / 2]
-# Flag to indicate if a point has been selected
+"""###############################
+# 
+#  Vision Mode
+# 
+###############################"""
+
+OptFlowMode = True
+YOLOMode = False
+YOLO_OptFlowMode = False
+
+"""
+# 
+# Optical Flow Point Tracking 
+# 
+"""
 point_selected = False
+p0       = None
 old_gray = None
 # Parameters for Lucas-Kanade optical flow
 lk_params = dict(winSize=(15, 15),
@@ -265,14 +268,47 @@ def select_point(event, x, y, flags, param):
         point_selected = True
         print(f"Tracking point selected at: ({x}, {y})")
 
+def calcOptFlow(frame):
+    global p0, old_gray
+    target_point = -1, -1
+
+    frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    if old_gray is not None and p0 is not None:
+        p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
+
+        if p1 is not None and st.any():
+            good_new = p1[st == 1]
+            good_old = p0[st == 1]
+
+            a, b = good_new.ravel()
+            c, d = good_old.ravel()
+            target_point = [int(a), int(b)]
+
+            # Update the previous points
+            p0 = good_new.reshape(-1, 1, 2)
+
+    # Update the previous frame
+    old_gray = frame_gray.copy()
+
+    return target_point
+
+"""
+#
 # Create a window and bind the mouse callback function to it
+#
+"""
 cv2.namedWindow('Point Tracking', cv2.WINDOW_NORMAL)
 cv2.resizeWindow('Point Tracking', int(FRAME_WIDTH), int(FRAME_HEIGHT))
 cv2.setMouseCallback('Point Tracking', select_point)
 
-###############################
+
+"""
+# 
 # YOLO ID and Tracking
-###############################
+# 
+"""
+
 MODEL_PATH = r"C:\Users\Arjun\Documents\GitHub\TeensyPilot\include\TP_VisionControl\best.pt"
 CONF_THRES = 0.25
 YOLO_DEVICE = 0 if torch.cuda.is_available() else "cpu"
@@ -307,11 +343,39 @@ def get_YOLO_centroid(frame):
             # if i==0:
             return cx, cy
     
-        
+    return -1, -1
+    
 
-###############################
+"""
+# 
 # Controller
-###############################
+# 
+# Control parameters and Function
+#
+"""
+
+controller_on = False
+
+c_x = 0.0
+c_y = 0.0
+e_x_prev = 0.0
+e_y_prev = 0.0
+prev_time = time.time()
+
+# 1811+172 = 1639/2 = 992
+# 1811-992 = 819
+RC_STICK_MIN = 172
+RC_STICK_MAX = 1811
+RC_STICK_RANGE = RC_STICK_MAX - RC_STICK_MIN
+RC_STICK_MID = (RC_STICK_MIN + RC_STICK_MAX) // 2
+
+ANGLE_LIMIT = 55.0  # degrees
+CAMERA_ANGLE = 25.0  # degrees
+# 848, 678
+# Ideally Use LOS instead of pixel errors directly
+e_y_integral = 0.0
+
+HOVER_THROTTLE_PC = 0.25  # Portion of throttle range to hover at level flight
 
 # returns u_roll, u_pitch, u_throttle, u_yaw_rate
 def controller(e_x, e_y):
@@ -362,20 +426,21 @@ def controller(e_x, e_y):
     return u_roll, u_pitch, u_throttle, u_yaw_rate
 
 
-
-
-###############################
+"""
 # Main Loop
-###############################
+# 1. Read Joystick
+# 2. Get Frame
+# 3. If AUTO mode is on, get target and compute control
+# 4. Send CHANNELS_PACKED
+"""
 
 # time_passed = time.time()
 # start_time = time.time()
 # time_period = 2.0 # seconds for full sweep
 
-# LOOP_RATE = 0.01 # 100Hz
-loop_start_time = time.time()
+LOOP_RATE =  0.01 # 100Hz?
 while True:
-
+    start_time = time.perf_counter()
     # ----- Pygame Event Pump -----
     pygame.event.pump()
     # Read Axes (Sticks: Aileron, Elevator, Throttle, Rudder)
@@ -385,7 +450,6 @@ while True:
     buttons = [radio.get_button(i) for i in range(radio.get_numbuttons())]
     
     # --------- Get Frame ---------
-
     if CAMERA_ID:
         ret, frame = cap.read()
         if not ret:
@@ -396,166 +460,206 @@ while True:
         frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
     # ----- If AUTO mode is on -----
+    roll, pitch, throttle, yaw_rate = 0, 0, 0, 0
+
     if buttons[2]>0:
+        controller_on = True
         # -------- Get target ---------
         if OptFlowMode:
-            cx = vis_con_data["cx"]
-            cy = vis_con_data["cy"]
+            cx, cy = calcOptFlow(frame)
         elif YOLOMode:
-            cx = vis_con_data["cx_yolo"]
-            cy = vis_con_data["cy_yolo"]
+            cx, cy = get_YOLO_centroid(frame)
         elif YOLO_OptFlowMode:
-            cx = vis_con_data["cx_yolo_of"]
-            cy = vis_con_data["cy_yolo_of"]
+            cx, cy = -1, -1
     
-        #
-        e_x = cx - FRAME_WIDTH / 2
-        e_x /= (FRAME_WIDTH / 2)
-        e_y = cy - FRAME_HEIGHT / 2
-        e_y /= (FRAME_HEIGHT / 2)
-        roll, pitch, throttle, yaw_rate = controller(e_x, e_y)
+        if cx != -1 and cy != -1:
+            e_x = cx - FRAME_WIDTH / 2
+            e_x /= (FRAME_WIDTH / 2)
+            e_y = cy - FRAME_HEIGHT / 2
+            e_y /= (FRAME_HEIGHT / 2)
+            roll, pitch, throttle, yaw_rate = controller(e_x, e_y)
     else:
-        with vis_con_data["lock"]:
-            vis_con_data["controller_on"] = False
-        
-        roll = int(axes[0]*RC_STICK_RANGE/2) + RC_STICK_MID
-        pitch = int(axes[1]*RC_STICK_RANGE/2) + RC_STICK_MID
+        controller_on = False
+        # with vis_con_data["lock"]:
+        #     vis_con_data["controller_on"] = False
+    
+        roll     = int(axes[0]*RC_STICK_RANGE/2) + RC_STICK_MID
+        pitch    = int(axes[1]*RC_STICK_RANGE/2) + RC_STICK_MID
         throttle = int(axes[2]*RC_STICK_RANGE/2) + RC_STICK_MID
         yaw_rate = int(axes[3]*RC_STICK_RANGE/2) + RC_STICK_MID
+
 
     # ----- Send CHANNELS_PACKED -----
     if CRSF_initialized:
         ser.write(channelsCrsfToChannelsPacket([roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]))
     
 
-    # elapsed = time.perf_counter() - start_time
+    ####
+    # Display stuff
+
+    # Vision Mode
+    # Control Mode
+    # Target box/point
+    # YOLO stuff
+
+    if controller_on:
+        cv2.putText(frame, "AUTO", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    else:
+        cv2.putText(frame, "MANUAL", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+    # joy_center_l = (int(FRAME_WIDTH/2)-55, int(FRAME_HEIGHT/2))
+    # joy_center_r = (int(FRAME_WIDTH/2)+55, int(FRAME_HEIGHT/2))
+
+    H_SPACE = 55
+    SIZE_HALF = 50
+    SIZE = 100
+    V_POS = FRAME_HEIGHT*5/6
+    H_CENTER = FRAME_WIDTH*1/5
+    cv2.rectangle(frame, (int(H_CENTER-H_SPACE-SIZE_HALF), int(V_POS-SIZE_HALF)), (int(FRAME_WIDTH/2-55+SIZE_HALF), int(V_POS+SIZE_HALF)), (200, 200, 200), 2) # center point
+    cv2.rectangle(frame, (int(H_CENTER+H_SPACE-SIZE_HALF), int(V_POS-SIZE_HALF)), (int(FRAME_WIDTH/2+55+SIZE_HALF), int(V_POS+SIZE_HALF)), (200, 200, 200), 2) # center point
+    
+    cv2.circle(frame,    (int(H_CENTER-H_SPACE),                                              int(V_POS)                           ),5, (150, 150, 150), -1) # center point
+    cv2.circle(frame,    (int(H_CENTER-H_SPACE+SIZE*(yaw_rate-RC_STICK_MID)/RC_STICK_RANGE),   int(V_POS-SIZE*(throttle-RC_STICK_MID)/RC_STICK_RANGE)),5, (255, 0, 0), -1) # center point
+    cv2.circle(frame,    (int(H_CENTER+H_SPACE),                                              int(V_POS)                           ),5, (150, 150, 150), -1) # center point
+    cv2.circle(frame,    (int(H_CENTER+H_SPACE+SIZE*(roll-RC_STICK_MID)/RC_STICK_RANGE),       int(V_POS-SIZE*(pitch-RC_STICK_MID)/RC_STICK_RANGE)   ),5, (255, 0, 0), -1) # center point
+    
+
+    elapsed = time.perf_counter() - start_time
+    cv2.putText(frame, f"Loop Time: {elapsed*1000:0.1f}ms", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+    
+    cv2.imshow('Point Tracking', frame)
+
+    k = cv2.waitKey(30) & 0xff # used to be 30
+    if k == ord('q'):  # Press 'Esc' to exit
+        break
+    elif k == ord('c'): # Press 'c' to reset and select a new point
+        point_selected = False
+        p0 = None
+
+
+    
     # time.sleep(max(0, LOOP_RATE - elapsed))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-with serial.Serial(PORT, BAUD, timeout=2) as ser, mss.mss() as sct:
-    input = bytearray()
-    # Capture a monitor:
-    monitor = sct.monitors[1]
-    # 1920 1080 half resolution 960 540
-    while True:
-        
-        # Get raw pixels from the screen
-        sct_img = sct.grab(monitor)
-        # Convert to a NumPy array for OpenCV
-        img = np.array(sct_img)
-        img = cv2.resize(img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-        # Convert BGRA to BGR (OpenCV's default)
-        frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-        if point_selected:
-            frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            # The first frame after selection is stored as old_gray
-            if old_gray is not None:
-                p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
-
-                # Select good points
-                if p1 is not None and st.any():
-                    good_new = p1[st == 1]
-                    good_old = p0[st == 1]
-                    
-                    # Draw the tracked point
-                    a, b = good_new.ravel()
-                    c, d = good_old.ravel()
-                    target_point = [int(a), int(b)]
-                    cv2.line(frame, (int(a), int(b)), (int(c), int(d)), (255, 0, 0), 2)
-                    cv2.circle(frame, (int(a), int(b)), 5, (0, 255, 0), -1)
-
-                    # Update the previous points
-                    p0 = good_new.reshape(-1, 1, 2)
-
-            # Update the previous frame
-            old_gray = frame_gray.copy()
-        else:
-            # While waiting for a click, display the live feed and a message
-            cv2.putText(frame, "Click a point to track", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-
-        cv2.imshow('Point Tracking', frame)
-
-
-        k = cv2.waitKey(30) & 0xff
-        if k == ord('q'):  # Press 'Esc' to exit
-            break
-        elif k == ord('c'): # Press 'c' to reset and select a new point
-            point_selected = False
-            p0 = None
-        # sweeping values for testing
-        # roll = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
-        # pitch = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
-        # throttle = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
-        # yaw = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
-
-        # pitch = 992
-        # throttle = 1200
-
-        x, y = target_point if point_selected else (FRAME_WIDTH / 2, FRAME_HEIGHT / 2)
-
-        e_x = x - FRAME_WIDTH / 2
-        e_x /= (FRAME_WIDTH / 2)
-        e_y = (y - FRAME_HEIGHT / 2)
-        e_y /= (FRAME_HEIGHT / 2)
-
-        roll, pitch, throttle, yaw_rate = controller(e_x, e_y)
-
-        # print(f"Mouse cursor is at X: {x}, Y: {y}")
-        # print(f"Error values are: e_x: {e_x}, e_y: {e_y}")
-        if ser.in_waiting > 0:
-            input.extend(ser.read(ser.in_waiting))
-            
-        else:
-            if TX_ENABLED:
-                ser.write(channelsCrsfToChannelsPacket([roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]))
-                print("Sent CHANNELS_PACKED")
-            time.sleep(0.020)
-        # print(f"Buffer len: {len(input)}")
-        while len(input) > 2:
-            # This simple parser works with malformed CRSF streams
-            # it does not check the first byte for SYNC_BYTE, but
-            # instead just looks for anything where the packet length
-            # is 4-64 bytes, and the CRC validates
-            # print(f"Buffer len: {len(input)}")
-            expected_len = input[1] + 2
-            if expected_len > 64 or expected_len < 4:
-                input = bytearray()
-            elif len(input) >= expected_len:
-                single = input[:expected_len] # copy out this whole packet
-                input = input[expected_len:] # and remove it from the buffer
-
-                if not crsf_validate_frame(single): # single[-1] != crc:
-                    packet = ' '.join(map(hex, single))
-                    print(f"crc error: {packet}")
-                else:
-                    handleCrsfPacket(single[2], single)
-            else:
-                break
-
-
-
 cv2.destroyAllWindows()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# with serial.Serial(PORT, BAUD, timeout=2) as ser, mss.mss() as sct:
+#     input = bytearray()
+#     # Capture a monitor:
+#     monitor = sct.monitors[1]
+#     # 1920 1080 half resolution 960 540
+#     while True:
+        
+#         # Get raw pixels from the screen
+#         sct_img = sct.grab(monitor)
+#         # Convert to a NumPy array for OpenCV
+#         img = np.array(sct_img)
+#         img = cv2.resize(img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+#         # Convert BGRA to BGR (OpenCV's default)
+#         frame = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+
+#         if point_selected:
+#             frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+#             # The first frame after selection is stored as old_gray
+#             if old_gray is not None:
+#                 p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
+
+#                 # Select good points
+#                 if p1 is not None and st.any():
+#                     good_new = p1[st == 1]
+#                     good_old = p0[st == 1]
+                    
+#                     # Draw the tracked point
+#                     a, b = good_new.ravel()
+#                     c, d = good_old.ravel()
+#                     target_point = [int(a), int(b)]
+#                     cv2.line(frame, (int(a), int(b)), (int(c), int(d)), (255, 0, 0), 2)
+#                     cv2.circle(frame, (int(a), int(b)), 5, (0, 255, 0), -1)
+
+#                     # Update the previous points
+#                     p0 = good_new.reshape(-1, 1, 2)
+
+#             # Update the previous frame
+#             old_gray = frame_gray.copy()
+#         else:
+#             # While waiting for a click, display the live feed and a message
+#             cv2.putText(frame, "Click a point to track", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+
+#         cv2.imshow('Point Tracking', frame)
+
+
+#         k = cv2.waitKey(30) & 0xff
+#         if k == ord('q'):  # Press 'Esc' to exit
+#             break
+#         elif k == ord('c'): # Press 'c' to reset and select a new point
+#             point_selected = False
+#             p0 = None
+#         # sweeping values for testing
+#         # roll = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
+#         # pitch = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
+#         # throttle = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
+#         # yaw = int(MIN + (MAX - MIN) * ((time.time() - start_time) % time_period) / time_period)
+
+#         # pitch = 992
+#         # throttle = 1200
+
+#         # x, y = target_point if point_selected else (FRAME_WIDTH / 2, FRAME_HEIGHT / 2)
+
+#         # e_x = x - FRAME_WIDTH / 2
+#         # e_x /= (FRAME_WIDTH / 2)
+#         # e_y = (y - FRAME_HEIGHT / 2)
+#         # e_y /= (FRAME_HEIGHT / 2)
+
+#         # roll, pitch, throttle, yaw_rate = controller(e_x, e_y)
+
+#         # # print(f"Mouse cursor is at X: {x}, Y: {y}")
+#         # # print(f"Error values are: e_x: {e_x}, e_y: {e_y}")
+#         # if ser.in_waiting > 0:
+#         #     input.extend(ser.read(ser.in_waiting))
+            
+#         # else:
+#         #     if TX_ENABLED:
+#         #         ser.write(channelsCrsfToChannelsPacket([roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]))
+#         #         print("Sent CHANNELS_PACKED")
+#         #     time.sleep(0.020)
+#         # # print(f"Buffer len: {len(input)}")
+#         # while len(input) > 2:
+#         #     # This simple parser works with malformed CRSF streams
+#         #     # it does not check the first byte for SYNC_BYTE, but
+#         #     # instead just looks for anything where the packet length
+#         #     # is 4-64 bytes, and the CRC validates
+#         #     # print(f"Buffer len: {len(input)}")
+#         #     expected_len = input[1] + 2
+#         #     if expected_len > 64 or expected_len < 4:
+#         #         input = bytearray()
+#         #     elif len(input) >= expected_len:
+#         #         single = input[:expected_len] # copy out this whole packet
+#         #         input = input[expected_len:] # and remove it from the buffer
+
+#         #         if not crsf_validate_frame(single): # single[-1] != crc:
+#         #             packet = ' '.join(map(hex, single))
+#         #             print(f"crc error: {packet}")
+#         #         else:
+#         #             handleCrsfPacket(single[2], single)
+#         #     else:
+#         #         break
+
+
