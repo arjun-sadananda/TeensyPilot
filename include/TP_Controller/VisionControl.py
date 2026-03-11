@@ -34,6 +34,16 @@ Shared data
     Controller on?
 """
 
+# time_passed = time.time()
+# start_time = time.time()
+# time_period = 2.0 # seconds for full sweep
+loop_time = 0
+LOOP_RATE =  0.01 # 100Hz?
+AUTO_Switch = 0
+Vision_Switch = 0
+channels = []
+
+
 # CRSF Serial Setup
 
 CRSF_PORT = 'COM6'
@@ -167,121 +177,9 @@ def get_YOLO_centroid(frame):
     
     return -1, -1
 
-"""
-# Main Loop
-# 1. Read Joystick
-# 2. Get Frame
-# 3. If AUTO mode is on, get target and compute control
-# 4. Send CHANNELS_PACKED
-"""
-
-# time_passed = time.time()
-# start_time = time.time()
-# time_period = 2.0 # seconds for full sweep
-
-LOOP_RATE =  0.01 # 100Hz?
-AUTO_Switch = 0
-controller_on = False
-Vision_Switch = 1
-roll, pitch, throttle, yaw_rate = 0, 0, 0, 0
-channels = []
-
-while True:
-    start_time = time.perf_counter()
-    # ----- Pygame Event Pump -----
-    pygame.event.pump()
-    if radio_initialized:
-        # Read Axes (Sticks: Aileron, Elevator, Throttle, Rudder)
-        # Values typically range from -1.0 to 1.0
-        # Read Buttons (Switches mapped as buttons)
-        # 8 channels:   r,              p,          t,          y,      arm-SF,     flightmode-SC,     Vision SD,   VTX-powerlevel SA,
-        # buttons:      VTXon/off SB,   VTX-Ch-6P,  Control-SH
-        axes = [radio.get_axis(i) for i in range(radio.get_numaxes())]
-        buttons = [radio.get_button(i) for i in range(radio.get_numbuttons())]
-
-        roll     = int(axes[0]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-        pitch    = int(axes[1]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-        throttle = int(axes[2]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-        yaw_rate = int(axes[3]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-
-        arm_3sw       = int(axes[4]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-        fmode_3sw     = int(axes[5]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-        vision_3sw    = int(axes[6]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-        vtx_power_3sw = int(axes[7]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-
-        VTX_2sw     = int(buttons[0]*controller.RC_STICK_RANGE) + controller.RC_STICK_MIN
-        VTXCh_2sw   = int(buttons[1]*controller.RC_STICK_RANGE) + controller.RC_STICK_MIN
-        control_2sw = int(buttons[2]*controller.RC_STICK_RANGE) + controller.RC_STICK_MIN
-
-        # Vision_Switch = int(buttons[0]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
-        AUTO_Switch = True if buttons[2]>0 else False
-        Vision_Switch = round(axes[6]+1) # modes: 0 1 2
-
-        channels = [roll, pitch, throttle, yaw_rate, arm_3sw, fmode_3sw, vision_3sw, vtx_power_3sw] + [VTX_2sw, VTXCh_2sw, control_2sw] + [992 for ch in range(5)]
-        # for i in range(8):
-        #     channels.append(int(axes[i]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID)
-        # for i in range(8):
-        #     channels.append(int(buttons[i]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID)
 
 
-    # --------- Get Frame ---------
-    if CAMERA_ID:
-        ret, frame = cap.read()
-        # height, width, channels = frame.shape
-        # print(f"Width: {width}, Height: {height}, Channels: {channels}")
-
-        if not ret:
-            break
-    elif SCREEN_ID:
-        sct_img = sct.grab(sct.monitors[SCREEN_ID])
-        frame = np.array(sct_img)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-
-    # cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT), cv2.INTER_AREA)
-
-    # print(Vision_Switch)
-    # ----- If AUTO mode is on -----
-    if Vision_Switch>0:
-        # -------- Get target ---------
-        if Vision_Switch == 1:
-            cx, cy = opt_flow.calcOptFlow(frame)
-        elif Vision_Switch == 2:
-            cx, cy = get_YOLO_centroid(frame)
-        elif YOLO_OptFlowMode:
-            cx, cy = -1, -1
-
-        if AUTO_Switch:
-            
-            if cx != -1 and cy != -1:
-                e_x = cx - FRAME_WIDTH / 2
-                e_x /= (FRAME_WIDTH / 2)
-                e_y = cy - FRAME_HEIGHT / 2
-                e_y /= (FRAME_HEIGHT / 2)
-                e_x = 0
-                e_y = 0
-                roll, pitch, throttle, yaw_rate = controller.controller(e_x, e_y)
-                channels = [roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]
-        else:
-            controller_on = False
-            # with vis_con_data["lock"]:
-            #     vis_con_data["controller_on"] = False
-
-
-    # ----- Send CHANNELS_PACKED -----
-    if CRSF_initialized:
-        crsf.write(channels)
-        # crsf.write_stabilize(roll, pitch, throttle, yaw_rate)
-        # ser.write(channelsCrsfToChannelsPacket([roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]))
-    
-
-    ####
-    # Display stuff
-
-    # Vision Mode
-    # Control Mode
-    # Target box/point
-    # YOLO stuff
-
+def display_status(frame):
     fontFace = cv2.FONT_HERSHEY_SIMPLEX
     textHeight = int(FRAME_HEIGHT/30)
     thickness = 2
@@ -296,6 +194,9 @@ while True:
 
     TX_Ch_Textspace_x = int((FRAME_WIDTH-2*TextBox_x)/5)
     TX_Ch_Textbox_y = int(TextBox_y + 3.5*textHeight)
+
+    
+    roll, pitch, throttle, yaw_rate = channels[0:4]
 
     if AUTO_Switch:
         color = (100, 100, 100)
@@ -346,9 +247,6 @@ while True:
         cv2.putText(frame, "| VTX Ch1", (TextBox_x+4*TX_Ch_Textspace_x, TX_Ch_Textbox_y), fontFace, fontScale2, (0, 255, 255), thickness2)
     else:
         cv2.putText(frame, "| VTX Ch6", (TextBox_x+4*TX_Ch_Textspace_x, TX_Ch_Textbox_y), fontFace, fontScale2, (0, 255, 255), thickness2)
-    
-
-
 
     # joy_center_l = (int(FRAME_WIDTH/2)-55, int(FRAME_HEIGHT/2))
     # joy_center_r = (int(FRAME_WIDTH/2)+55, int(FRAME_HEIGHT/2))
@@ -363,6 +261,10 @@ while True:
     cv2.rectangle(frame, (int(H_CENTER-H_SPACE-SIZE_HALF), int(V_CENTER-SIZE_HALF)), (int(H_CENTER-H_SPACE+SIZE_HALF), int(V_CENTER+SIZE_HALF)), (200, 200, 200), 2) # center point
     cv2.rectangle(frame, (int(H_CENTER+H_SPACE-SIZE_HALF), int(V_CENTER-SIZE_HALF)), (int(H_CENTER+H_SPACE+SIZE_HALF), int(V_CENTER+SIZE_HALF)), (200, 200, 200), 2) # center point
     
+    Crosshair_size = 8
+    cv2.line(frame, (int(FRAME_WIDTH/2)+Crosshair_size, int(FRAME_HEIGHT/2)), (int(FRAME_WIDTH/2)-Crosshair_size, int(FRAME_HEIGHT/2)), (150, 150, 150), 2)
+    cv2.line(frame, (int(FRAME_WIDTH/2), int(FRAME_HEIGHT/2)+Crosshair_size), (int(FRAME_WIDTH/2), int(FRAME_HEIGHT/2)-Crosshair_size), (150, 150, 150), 2)
+
     cv2.circle(frame, (int(H_CENTER-H_SPACE),                                              int(V_CENTER)                           ),5, (150, 150, 150), -1) # center point
     cv2.circle(frame, (int(H_CENTER-H_SPACE+SIZE*(yaw_rate-controller.RC_STICK_MID)/controller.RC_STICK_RANGE),  int(V_CENTER-SIZE*(throttle-controller.RC_STICK_MID)/controller.RC_STICK_RANGE)),5, (255, 0, 0), -1) # center point
     cv2.circle(frame, (int(H_CENTER+H_SPACE),                                              int(V_CENTER)                           ),5, (150, 150, 150), -1) # center point
@@ -370,13 +272,116 @@ while True:
     
     if opt_flow.point_selected:
         cv2.circle(frame, (int(opt_flow.selected_point[0]), int(opt_flow.selected_point[1])), 5, (150, 150, 150), -1) # center point
-        cv2.circle(frame, (int(cx), int(cy)), 5, (255, 0, 0), -1) # center point
+        cv2.circle(frame, (int(cx), int(cy)), 7, (255, 0, 0), 2) # center point
+    
+    cv2.putText(frame, f"| dt: {loop_time*1000:2.0f}ms", (TextBox_x+TX_Ch_Textspace_x, TextBox_y), fontFace, fontScale, (255, 255, 0), thickness)
 
+"""
+# Main Loop
+# 1. Read Joystick
+# 2. Get Frame
+# 3. If AUTO mode is on, get target and compute control
+# 4. Send CHANNELS_PACKED
+"""
+
+while True:
+    start_time = time.perf_counter()
+    # ----- Pygame Event Pump -----
+    pygame.event.pump()
+    if radio_initialized:
+        # Read Axes (Sticks: Aileron, Elevator, Throttle, Rudder)
+        # Values typically range from -1.0 to 1.0
+        # Read Buttons (Switches mapped as buttons)
+        # 8 channels:   r,              p,          t,          y,      arm-SF,     flightmode-SC,     Vision SD,   VTX-powerlevel SA,
+        # buttons:      VTXon/off SB,   VTX-Ch-6P,  Control-SH
+        axes = [radio.get_axis(i) for i in range(radio.get_numaxes())]
+        buttons = [radio.get_button(i) for i in range(radio.get_numbuttons())]
+
+        roll     = int(axes[0]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+        pitch    = int(axes[1]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+        throttle = int(axes[2]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+        yaw_rate = int(axes[3]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+
+        arm_3sw       = int(axes[4]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+        fmode_3sw     = int(axes[5]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+        vision_3sw    = int(axes[7]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+        vtx_power_3sw = int(axes[6]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+
+        VTX_2sw     = int(buttons[0]*controller.RC_STICK_RANGE) + controller.RC_STICK_MIN
+        VTXCh_2sw   = int(buttons[1]*controller.RC_STICK_RANGE) + controller.RC_STICK_MIN
+        control_2sw = int(buttons[2]*controller.RC_STICK_RANGE) + controller.RC_STICK_MIN
+
+        # Vision_Switch = int(buttons[0]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID
+        AUTO_Switch = True if buttons[2]>0 else False
+        Vision_Switch = round(axes[7]+1) # modes: 0 1 2
+
+        channels = [roll, pitch, throttle, yaw_rate, arm_3sw, fmode_3sw, vision_3sw, vtx_power_3sw] + [VTX_2sw, VTXCh_2sw, control_2sw] + [992 for ch in range(5)]
+        # for i in range(8):
+        #     channels.append(int(axes[i]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID)
+        # for i in range(8):
+        #     channels.append(int(buttons[i]*controller.RC_STICK_RANGE/2) + controller.RC_STICK_MID)
+
+
+    # --------- Get Frame ---------
+    if CAMERA_ID:
+        ret, frame = cap.read()
+        # height, width, channels = frame.shape
+        # print(f"Width: {width}, Height: {height}, Channels: {channels}")
+
+        if not ret:
+            break
+    elif SCREEN_ID:
+        sct_img = sct.grab(sct.monitors[SCREEN_ID])
+        frame = np.array(sct_img)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+
+    # cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT), cv2.INTER_AREA)
+
+    # print(Vision_Switch)
+    # ----- If AUTO mode is on -----
+    if Vision_Switch>0:
+        # -------- Get target ---------
+        if Vision_Switch == 1 or Vision_Switch == 2:
+            cx, cy = opt_flow.calcOptFlow(frame)
+        # elif Vision_Switch == 2:
+        #     cx, cy = get_YOLO_centroid(frame)
+        # elif YOLO_OptFlowMode:
+        #     cx, cy = -1, -1
+
+        if AUTO_Switch:
+            
+            if cx != -1 and cy != -1:
+                e_x = cx - FRAME_WIDTH / 2
+                e_x /= (FRAME_WIDTH / 2)
+                e_y = cy - FRAME_HEIGHT / 2
+                e_y /= (FRAME_HEIGHT / 2)
+                # e_x = 0
+                # e_y = 0
+                roll, pitch, throttle, yaw_rate = controller.controller(e_x, e_y)
+                channels = [roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]
+                # channels = [roll, pitch, throttle, yaw_rate, arm_3sw, fmode_3sw, vision_3sw, vtx_power_3sw] + [VTX_2sw, VTXCh_2sw, control_2sw] + [992 for ch in range(5)]
+                # channels[0:3] = [roll, pitch, throttle, yaw_rate]
+                # channels = [controller.RC_STICK_MIN, controller.RC_STICK_MIN, controller.RC_STICK_MIN, controller.RC_STICK_MIN] + [992 for ch in range(12)]
+
+    # ----- Send CHANNELS_PACKED -----
+    if CRSF_initialized:
+        crsf.write(channels)
+        # crsf.write_stabilize(roll, pitch, throttle, yaw_rate)
+        # ser.write(channelsCrsfToChannelsPacket([roll, pitch, throttle, yaw_rate] + [992 for ch in range(12)]))
     
+
+    ####
+    # Display stuff
+
+    # Vision Mode
+    # Control Mode
+    # Target box/point
+    # YOLO stuff
     
-    elapsed = time.perf_counter() - start_time
-    cv2.putText(frame, f"| dt: {elapsed*1000:2.0f}ms", (TextBox_x+TX_Ch_Textspace_x, TextBox_y), fontFace, fontScale, (255, 255, 0), thickness)
-    
+    loop_time = time.perf_counter() - start_time
+
+    display_status(frame)
+
     cv2.imshow('Point Tracking', frame)
 
     k = cv2.waitKey(30) & 0xff # used to be 30
